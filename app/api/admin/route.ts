@@ -2,7 +2,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { NextRequest, NextResponse } from "next/server";
 import { Resend } from "resend";
 import { z } from "zod";
-import { db } from "@/lib/firebase-admin";
+import { adminAuth, db } from "@/lib/firebase-admin";
 import { notifyUser } from "@/lib/notifications";
 import { required, userFromRequest } from "@/lib/server";
 
@@ -13,7 +13,7 @@ const ADMIN_EMAIL = (process.env.SUPER_ADMIN_EMAIL || "yiorgosantoni@gmail.com")
 const actionSchema = z.object({
   resource: z.enum(["kyc", "listing", "withdrawal", "order", "ticket", "user", "report", "auditLogs"]),
   id: z.string().min(1).max(200),
-  action: z.enum(["approve", "reject", "reupload", "delete", "paid", "release", "refund", "close", "suspend", "restore", "clearAll", "deleteSelected"]),
+  action: z.enum(["approve", "reject", "reupload", "delete", "paid", "release", "refund", "close", "suspend", "restore", "clearAll", "deleteSelected", "forceLogoutAll", "deleteSelectedOrders"]),
   ids: z.array(z.string().min(1).max(200)).max(200).optional(),
   note: z.string().trim().max(500).optional()
 });
@@ -67,6 +67,31 @@ export async function PATCH(req: NextRequest) {
   try {
     const actingAdmin = await admin(req);
     const body = actionSchema.parse(await req.json());
+
+    if (body.resource === "users" && body.action === "forceLogoutAll") {
+      let revoked = 0;
+      let nextPageToken: string | undefined;
+      do {
+        const page = await adminAuth.listUsers(1000, nextPageToken);
+        for (const record of page.users) {
+          if (record.email?.toLowerCase() === ADMIN_EMAIL) continue;
+          await adminAuth.revokeRefreshTokens(record.uid);
+          revoked++;
+        }
+        nextPageToken = page.pageToken;
+      } while (nextPageToken);
+      await db.collection("auditLogs").add({adminUid:actingAdmin.uid,adminEmail:actingAdmin.email,resource:"users",resourceId:"all",action:"forceLogoutAll",note:"Revoked all buyer/seller Firebase sessions; admin account excluded.",createdAt:FieldValue.serverTimestamp()});
+      return NextResponse.json({ok:true,revoked});
+    }
+
+    if (body.resource === "order" && body.action === "deleteSelectedOrders") {
+      const ids = body.ids || [];
+      const batch = db.batch();
+      for (const id of ids) batch.delete(db.collection("orders").doc(id));
+      await batch.commit();
+      await db.collection("auditLogs").add({adminUid:actingAdmin.uid,adminEmail:actingAdmin.email,resource:"order",resourceId:"selected",action:"deleteSelectedOrders",note:`Deleted ${ids.length} selected orders/disputes.`,createdAt:FieldValue.serverTimestamp()});
+      return NextResponse.json({ok:true,deleted:ids.length});
+    }
 
     if (body.resource === "auditLogs" && body.action === "clearAll") {
       await clearCollection("auditLogs");
