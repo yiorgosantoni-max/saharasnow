@@ -11,9 +11,9 @@ export const dynamic = "force-dynamic";
 
 const ADMIN_EMAIL = (process.env.SUPER_ADMIN_EMAIL || "yiorgosantoni@gmail.com").toLowerCase();
 const actionSchema = z.object({
-  resource: z.enum(["kyc", "listing", "withdrawal", "order", "ticket", "user", "report", "auditLogs"]),
+  resource: z.enum(["kyc", "listing", "withdrawal", "order", "ticket", "user", "users", "report", "auditLogs"]),
   id: z.string().min(1).max(200),
-  action: z.enum(["approve", "reject", "reupload", "delete", "paid", "release", "refund", "close", "suspend", "restore", "clearAll", "deleteSelected", "forceLogoutAll", "deleteSelectedOrders"]),
+  action: z.enum(["approve", "reject", "reupload", "delete", "paid", "release", "refund", "close", "suspend", "restore", "clearAll", "deleteSelected", "forceLogoutAll", "deleteSelectedOrders", "deleteSelectedListings"]),
   ids: z.array(z.string().min(1).max(200)).max(200).optional(),
   note: z.string().trim().max(500).optional()
 });
@@ -32,9 +32,11 @@ function jsonValue(value: unknown): unknown {
   return value;
 }
 
-async function recent(collection: string, limit = 100) {
+type RecentItem = Record<string, unknown> & { id: string };
+
+async function recent(collection: string, limit = 100): Promise<RecentItem[]> {
   const snap = await db.collection(collection).limit(limit).get();
-  return snap.docs.map(doc => jsonValue({id: doc.id, ...doc.data()}));
+  return snap.docs.map(doc => jsonValue({id: doc.id, ...doc.data()}) as RecentItem);
 }
 
 export async function GET(req: NextRequest) {
@@ -42,7 +44,7 @@ export async function GET(req: NextRequest) {
     await admin(req);
     const [kyc, listings, withdrawals, orders, tickets, users, auditLogs, reports] = await Promise.all([
       recent("kyc"), recent("listings"), recent("withdrawals"),
-      recent("orders").then(items => items.filter(item => ["paid","in-progress","delivered","disputed","completed-released","refunded"].includes(String(item.status)))),
+      recent("orders").then((items: RecentItem[]) => items.filter((item: RecentItem) => ["paid","in-progress","delivered","disputed","completed-released","refunded"].includes(String(item.status)))),
       recent("supportTickets"), recent("users", 100), recent("auditLogs", 200), recent("contentReports", 200)
     ]);
     return NextResponse.json({adminEmail: ADMIN_EMAIL, kyc, listings, withdrawals, orders, tickets, users, auditLogs, reports});
@@ -90,6 +92,15 @@ export async function PATCH(req: NextRequest) {
       for (const id of ids) batch.delete(db.collection("orders").doc(id));
       await batch.commit();
       await db.collection("auditLogs").add({adminUid:actingAdmin.uid,adminEmail:actingAdmin.email,resource:"order",resourceId:"selected",action:"deleteSelectedOrders",note:`Deleted ${ids.length} selected orders/disputes.`,createdAt:FieldValue.serverTimestamp()});
+      return NextResponse.json({ok:true,deleted:ids.length});
+    }
+    if (body.resource === "listing" && body.action === "deleteSelectedListings") {
+      const ids = body.ids || [];
+      if (!ids.length) return NextResponse.json({ok:true,deleted:0});
+      const batch = db.batch();
+      for (const id of ids) batch.delete(db.collection("listings").doc(id));
+      await batch.commit();
+      await db.collection("auditLogs").add({adminUid:actingAdmin.uid,adminEmail:actingAdmin.email,resource:"listing",resourceId:"selected",action:"deleteSelectedListings",note:`Deleted ${ids.length} selected listings from the marketplace and admin dashboard.`,createdAt:FieldValue.serverTimestamp()});
       return NextResponse.json({ok:true,deleted:ids.length});
     }
 
