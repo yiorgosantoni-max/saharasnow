@@ -46,3 +46,24 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({error:result.message},{status:result.status});
   }
 }
+
+
+export async function DELETE(req: NextRequest) {
+  try {
+    const user = await userFromRequest(req);
+    const snap = await db.collection("notifications").where("userId", "==", user.uid).get();
+    let deleted = 0;
+    for (let start = 0; start < snap.docs.length; start += 450) {
+      const batch = db.batch();
+      for (const doc of snap.docs.slice(start, start + 450)) {
+        batch.delete(doc.ref);
+        deleted++;
+      }
+      await batch.commit();
+    }
+    return NextResponse.json({ok:true,deleted});
+  } catch (error) {
+    const result = publicError(error);
+    return NextResponse.json({error:result.message},{status:result.status});
+  }
+}
