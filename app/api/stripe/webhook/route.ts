@@ -24,7 +24,7 @@ export async function POST(req:NextRequest){
       for(const coveredId of Array.isArray(purchase.coveredListingIds)?purchase.coveredListingIds:[]){const coveredRef=db.collection("listings").doc(String(coveredId)),covered=await coveredRef.get(),data=covered.data()||{};if(!covered.exists||data.adminNotificationSentAt)continue;const sent=await notifyAdmin({subject:`Listing approval required: ${String(data.title||"New service")}`,heading:"Paid listing awaiting approval",message:"The seller completed the listing-credit payment and this service is ready for administrator review.",details:{Title:data.title||"New service","Seller ID":sellerId,Category:data.category||"",Subcategory:data.subcategory||"","Listing ID":covered.id,"Stripe payment":"Confirmed"},actionLabel:"Review listing",actionPath:"/admin"});if(sent)await coveredRef.set({adminNotificationSentAt:FieldValue.serverTimestamp()},{merge:true});}
       return NextResponse.json({received:true});
     }
-    if(orderId){
+    if(orderId && session.payment_status === "paid"){
       await db.runTransaction(async tx=>{const orderRef=db.collection("orders").doc(orderId),counterRef=db.collection("counters").doc("orders");const [order,counter]=await Promise.all([tx.get(orderRef),tx.get(counterRef)]);if(!order.exists)throw new Error("Order not found");if(order.data()?.status==="paid")return;const number=Number(counter.data()?.next??1);tx.set(counterRef,{next:number+1},{merge:true});tx.update(orderRef,{orderNumber:number,status:"paid",paidAt:new Date(),disputeDeadline:new Date(Date.now()+5*86400000),stripePaymentIntent:session.payment_intent,invoiceEmailStatus:"pending"});});
       const orderRef=db.collection("orders").doc(orderId),order=(await orderRef.get()).data();
       if(order?.orderNumber){

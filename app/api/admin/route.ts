@@ -41,7 +41,8 @@ export async function GET(req: NextRequest) {
   try {
     await admin(req);
     const [kyc, listings, withdrawals, orders, tickets, users, auditLogs, reports] = await Promise.all([
-      recent("kyc"), recent("listings"), recent("withdrawals"), recent("orders"),
+      recent("kyc"), recent("listings"), recent("withdrawals"),
+      recent("orders").then(items => items.filter(item => ["paid","in-progress","delivered","disputed","completed-released","refunded"].includes(String(item.status)))),
       recent("supportTickets"), recent("users", 100), recent("auditLogs", 200), recent("contentReports", 200)
     ]);
     return NextResponse.json({adminEmail: ADMIN_EMAIL, kyc, listings, withdrawals, orders, tickets, users, auditLogs, reports});
