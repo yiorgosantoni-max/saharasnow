@@ -1,0 +1,63 @@
+name: Combine marketplace updates
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  combine:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Apply combined buyer seller earnings admin updates
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          def patch(path, replacements):
+              p=Path(path); s=p.read_text(encoding='utf-8')
+              for old,new in replacements:
+                  if old not in s:
+                      raise SystemExit(f'Expected source pattern not found in {path}: {old[:120]!r}')
+                  s=s.replace(old,new,1)
+              p.write_text(s,encoding='utf-8')
+          patch('app/page.tsx', [
+            ('const[accountPanel,setAccountPanel]=useState<"profile"|"kyc"|"notifications"|"inbox"|"orders"|"services"|null>(null);','const[accountPanel,setAccountPanel]=useState<"profile"|"earnings"|"kyc"|"notifications"|"inbox"|"orders"|"services"|null>(null);'),
+            ('const[sellerBalance,setSellerBalance]=useState(0);const[sellerPending,setSellerPending]=useState(0);const[sellerTotalEarnings,setSellerTotalEarnings]=useState(0);','const[sellerBalance,setSellerBalance]=useState(0);const[sellerPending,setSellerPending]=useState(0);const[sellerTotalEarnings,setSellerTotalEarnings]=useState(0);'),
+            ('setProfileImage(profile.profileImageUrl||"");if(profile.mode==="SELLER"&&completed)setMode("SELLER");else setMode("BUYING");const status=profile.kycStatus||"not-started";','setProfileImage(profile.profileImageUrl||"");if(profile.mode==="SELLER"&&completed)setMode("SELLER");else setMode("BUYING");setSellerBalance(Number(profile.availableBalanceCents||0)/100);setSellerPending(Number(profile.pendingEarningsCents||0)/100);setSellerTotalEarnings(Number(profile.totalEarningsCents||0)/100);const status=profile.kycStatus||"not-started";'),
+            ('const beginSelling=(openListing=false)=>{if(!profileComplete){setMode("BUYING");setAccountPanel("profile");flash("Complete and save your first name, surname and country before selling.");return}setMode("SELLER");if(openListing)setListingOpen(true)};','const persistMode=async(nextMode:"BUYING"|"SELLER")=>{const previousMode=mode;setMode(nextMode);const user=getClientAuth().currentUser;if(!user)return;try{const token=await user.getIdToken(true);const response=await fetch("/api/profile",{method:"PATCH",headers:{"content-type":"application/json",authorization:`Bearer ${token}`},body:JSON.stringify({firstName:firstName.trim(),lastName:lastName.trim(),country:country.trim(),mode:nextMode,profileImageUrl:profileImage})});const data=await response.json();if(!response.ok)throw new Error(data.error||"Unable to save dashboard mode");flash(nextMode==="SELLER"?"Seller mode saved. Your dashboard will stay in Seller mode.":"Buyer mode saved. Your dashboard will stay in Buyer mode.");}catch(error){setMode(previousMode);flash(error instanceof Error?error.message:"Unable to save dashboard mode")}};const beginSelling=(openListing=false)=>{if(!profileComplete){setMode("BUYING");setAccountPanel("profile");flash("Complete and save your first name, surname and country before selling.");return}void persistMode("SELLER");if(openListing)setListingOpen(true)};'),
+            ('onClick={()=>setMode("BUYING")}>BUYING</button>','onClick={()=>void persistMode("BUYING")}>BUYING</button>'),
+            ('<button className={accountPanel==="profile"?"active":""} onClick={()=>setAccountPanel("profile")}>Profile</button>{mode==="SELLER"&&','<button className={accountPanel==="profile"?"active":""} onClick={()=>setAccountPanel("profile")}>Profile</button><button className={accountPanel==="earnings"?"active":""} onClick={()=>setAccountPanel("earnings")}>Earnings</button>{mode==="SELLER"&&'),
+            ('{accountPanel==="kyc"&&<div className="kycPanel">','{accountPanel==="earnings"&&<div className="ordersPanel"><div className="myServicesHead"><div><h3>Earnings</h3><p>{mode==="SELLER"?"Your private seller earnings dashboard. These figures are never shown on your public profile.":"Your buyer account does not have seller earnings. Switch to SELLER mode when you are ready to sell services."}</p></div></div>{mode==="SELLER"?<><div className="fundStatus"><span><small>Total released earnings</small><b>€{sellerTotalEarnings.toFixed(2)}</b><i>Completed orders released to you</i></span><span><small>Pending earnings</small><b>€{sellerPending.toFixed(2)}</b><i>{sellerPending>0?"Held during the dispute period":"No pending earnings"}</i></span><span><small>Available to withdraw</small><b>€{sellerBalance.toFixed(2)}</b><i>Current withdrawable balance</i></span></div><button className="withdrawButton" disabled={sellerBalance<=0||Boolean(withdrawalRequest)} onClick={()=>setWithdrawOpen(true)}>{withdrawalRequest?"Withdrawal request pending":"Request withdrawal"}</button></>:<div className="noOrders"><b>No seller earnings in Buying mode</b><p>Switch to SELLER mode when you are ready to sell services.</p></div>}</div>}{accountPanel==="kyc"&&<div className="kycPanel">')
+          ])
+          patch('app/api/notifications/route.ts', [
+            ('const id = String(body.id || "");','const id = String(body.id || "");')
+          ])
+          p=Path('app/api/notifications/route.ts'); s=p.read_text(encoding='utf-8')
+          old='''export async function DELETE(req: NextRequest) {\n  try {\n    const user = await userFromRequest(req);\n    const snap = await db.collection("notifications").where("userId", "==", user.uid).get();'''
+          new='''export async function DELETE(req: NextRequest) {\n  try {\n    const user = await userFromRequest(req);\n    const requestedId = String(new URL(req.url).searchParams.get("id") || "");\n    if (requestedId) {\n      const ref = db.collection("notifications").doc(requestedId);\n      const snap = await ref.get();\n      if (!snap.exists || String(snap.data()?.userId) !== user.uid) return NextResponse.json({error:"Notification not found."},{status:404});\n      await ref.delete();\n      return NextResponse.json({ok:true,deleted:1});\n    }\n    const snap = await db.collection("notifications").where("userId", "==", user.uid).get();'''
+          if old not in s: raise SystemExit('notification delete pattern missing')
+          p.write_text(s.replace(old,new,1),encoding='utf-8')
+          patch('app/admin/page.tsx', [
+            ('type Data = {adminEmail:string;kyc:Item[];listings:Item[];withdrawals:Item[];orders:Item[];tickets:Item[];users:Item[];auditLogs:Item[];reports:Item[]};','type Data = {adminEmail:string;kyc:Item[];listings:Item[];withdrawals:Item[];orders:Item[];tickets:Item[];users:Item[];earnings:Item[];auditLogs:Item[];reports:Item[]};'),
+            ('type Tab = "kyc"|"listings"|"withdrawals"|"orders"|"tickets"|"users"|"reports"|"auditLogs";','type Tab = "kyc"|"listings"|"withdrawals"|"orders"|"tickets"|"users"|"earnings"|"reports"|"auditLogs";'),
+            ('const labels:Record<Tab,string>={kyc:"KYC",listings:"Listings",withdrawals:"Withdrawals",orders:"Orders & disputes",tickets:"Support",users:"Users",reports:"Reports",auditLogs:"Audit log"};','const labels:Record<Tab,string>={kyc:"KYC",listings:"Listings",withdrawals:"Withdrawals",orders:"Orders & disputes",tickets:"Support",users:"Users",earnings:"Earnings",reports:"Reports",auditLogs:"Audit log"};'),
+            ('const resource:Record<Exclude<Tab,"auditLogs">,string>={','const resource:Record<Exclude<Tab,"auditLogs"|"earnings">,string>={'),
+            ('body:JSON.stringify({resource:resource[tab as Exclude<Tab,"auditLogs">],id:item.id,action,note})','body:JSON.stringify({resource:resource[tab as Exclude<Tab,"auditLogs"|"earnings">],id:item.id,action,note})'),
+            ('{tab==="listings"&&<p>Review submitted services here. Select <b>Publish</b> to make a service visible on the marketplace.</p>}','{tab==="listings"&&<p>Review submitted services here. Select <b>Publish</b> to make a service visible on the marketplace.</p>}{tab==="earnings"&&<p>Private earnings view for administrators. Public profiles never expose these figures.</p>}'),
+            ('{Object.entries(item).filter(([k])=>![\'id\',\'title\',\'reference\',\'email\',\'status\',\'kycStatus\',\'accountStatus\'].includes(k)).slice(0,8).map(([k,v])=><div key={k}><dt>{k.replace(/([A-Z])/g," $1")}</dt><dd>{show(v)}</dd></div>)}','{Object.entries(item).filter(([k])=>![\'id\',\'title\',\'reference\',\'email\',\'status\',\'kycStatus\',\'accountStatus\'].includes(k)).slice(0,8).map(([k,v])=><div key={k}><dt>{k.replace(/([A-Z])/g," $1")}</dt><dd>{show(v)}</dd></div>)}')
+          ])
+          # Replace the generic card dl with an earnings-specific branch if the compact source supports it.
+          p=Path('app/admin/page.tsx'); s=p.read_text(encoding='utf-8')
+          marker='<dl>{Object.entries(item).filter(([k])=>![\'id\',\'title\',\'reference\',\'email\',\'status\',\'kycStatus\',\'accountStatus\'].includes(k)).slice(0,8).map(([k,v])=><div key={k}><dt>{k.replace(/([A-Z])/g," $1")}</dt><dd>{show(v)}</dd></div>)}</dl>'
+          if marker in s:
+              replacement='<dl>{tab==="earnings"?<><div><dt>User</dt><dd>{show(item.name||item.email||item.id)}</dd></div><div><dt>Email</dt><dd>{show(item.email)}</dd></div><div><dt>Mode</dt><dd>{show(item.mode||"BUYING")}</dd></div><div><dt>Total released earnings</dt><dd>€{(Number(item.totalEarningsCents||0)/100).toFixed(2)}</dd></div><div><dt>Pending earnings</dt><dd>€{(Number(item.pendingEarningsCents||0)/100).toFixed(2)}</dd></div><div><dt>Available balance</dt><dd>€{(Number(item.availableBalanceCents||0)/100).toFixed(2)}</dd></div></>:Object.entries(item).filter(([k])=>![\'id\',\'title\',\'reference\',\'email\',\'status\',\'kycStatus\',\'accountStatus\'].includes(k)).slice(0,8).map(([k,v])=><div key={k}><dt>{k.replace(/([A-Z])/g," $1")}</dt><dd>{show(v)}</dd></div>)}</dl>'
+              p.write_text(s.replace(marker,replacement,1),encoding='utf-8')
+          PY
+      - name: Commit combined update
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/page.tsx app/admin/page.tsx app/api/notifications/route.ts
+          git diff --cached --quiet || git commit -m "Combine buyer seller persistence private earnings and notification controls"
+          git push
