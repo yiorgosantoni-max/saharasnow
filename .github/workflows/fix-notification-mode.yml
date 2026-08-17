@@ -1,0 +1,43 @@
+name: Fix notification mode persistence
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Fix notification panel mode reset
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('app/page.tsx')
+          text = p.read_text(encoding='utf-8')
+          old = 'if(accountPanel==="inbox"){loadProfile();loadInbox()}if(accountPanel==="notifications"){loadProfile();loadNotifications()}if(accountPanel==="orders"){loadProfile();loadOrders()}'
+          new = 'if(accountPanel==="inbox"){loadInbox()}if(accountPanel==="notifications"){loadNotifications()}if(accountPanel==="orders"){loadOrders()}'
+          if old not in text:
+              print('Target already fixed or not present; nothing to change.')
+          else:
+              p.write_text(text.replace(old, new, 1), encoding='utf-8')
+              print('Removed panel-open profile reload that could overwrite the selected Buyer/Seller mode.')
+          PY
+
+      - name: Commit fix and remove one-time workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/page.tsx
+          git rm .github/workflows/fix-notification-mode.yml || true
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "Keep seller mode when opening notifications"
+            git push origin HEAD:main
+          fi
