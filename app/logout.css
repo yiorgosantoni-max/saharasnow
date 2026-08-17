@@ -1,0 +1,7 @@
+.profileButtons{display:flex;gap:10px;align-items:center;margin-top:16px}
+.logoutButton{border:1px solid #ffc5c0;background:#fff2f0;color:#a92d26;border-radius:9px;padding:12px 18px;font-weight:800;cursor:pointer}
+.logoutButton:hover{background:#ffe5e2}
+.adminHeaderActions{margin-left:auto;display:flex!important;flex-direction:row!important;gap:8px}
+.adminHeaderActions button{margin-left:0!important}
+.adminHeader .adminLogout{border-color:#ffc5c0;background:#fff2f0;color:#a92d26}
+@media(max-width:600px){.profileButtons{align-items:stretch;flex-direction:column}.adminHeaderActions button{padding:8px 10px}.adminHeaderActions button:first-child{display:none}}

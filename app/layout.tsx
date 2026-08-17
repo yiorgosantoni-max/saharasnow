@@ -1,0 +1,3 @@
+import type {Metadata} from "next";import "./globals.css";import "./auth.css";import "./design-menu.css";import "./account.css";import "./discounts.css";import "./kyc.css";import "./live.css";import "./operations.css";import "./presence.css";import "./profile.css";import "./share.css";import "./suite.css";import "./contact.css";import "./listing.css";import "./logout.css";import "./package-toggle.css";import ImageProtection from "./image-protection";
+export const metadata:Metadata={title:"Saharasnow Marketplace",description:"Find trusted independent talent for every idea.",other:{"codex-preview":"development"}};
+export default function RootLayout({children}:{children:React.ReactNode}){return <html lang="en"><body><ImageProtection/>{children}</body></html>}

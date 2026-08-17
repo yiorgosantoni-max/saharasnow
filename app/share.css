@@ -1,0 +1,10 @@
+.visual .favouriteButton{right:5px;top:5px}
+.cardShare{position:absolute;right:32px;top:5px;z-index:5}
+.visual .shareToggle{position:static;display:grid;place-items:center;font-size:12px}
+.shareMenu{position:absolute;right:0;top:26px;width:130px;padding:5px;background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:0 15px 35px #17154a30;display:grid;gap:2px;z-index:8}
+.visual .shareMenu button{position:static;width:100%;height:auto;border-radius:7px;background:#fff;color:var(--ink);padding:9px 10px;text-align:left;font-size:12px;font-weight:700}
+.visual .shareMenu button:hover,.visual .shareMenu button:focus-visible{background:#f3f1fb;outline:none}
+[dir="rtl"] .cardShare{right:auto;left:32px}
+[dir="rtl"] .visual .favouriteButton{right:auto;left:5px}
+[dir="rtl"] .shareMenu{right:auto;left:0}
+[dir="rtl"] .visual .shareMenu button{text-align:right}

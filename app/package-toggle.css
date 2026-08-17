@@ -1,0 +1,9 @@
+.packageHelp{color:var(--muted);font-size:13px;margin:-12px 0 18px}
+.packageTitle{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:16px}
+.packageTitle>b{font-size:16px;color:#075ee8}.packageTitle>small{background:#edf3ff;color:#075ee8;padding:5px 8px;border-radius:20px;font-size:9px;font-weight:800}
+.packageToggle{display:flex!important;align-items:center!important;flex-direction:row!important;gap:7px!important;margin:0!important;cursor:pointer}
+.packageToggle input{position:absolute;opacity:0;width:1px!important}.packageToggle i{width:38px;height:22px;border-radius:20px;background:#b8bdca;position:relative}
+.packageToggle i:after{content:"";position:absolute;width:16px;height:16px;background:#fff;border-radius:50%;left:3px;top:3px;transition:.2s}
+.packageToggle input:checked+i{background:#075ee8}.packageToggle input:checked+i:after{left:19px}.packageToggle span{font-size:10px;color:var(--muted)}
+.packageEditor section.packageOff{background:#f6f7fa;border-style:dashed}.packageDisabled{color:var(--muted);font-size:12px;min-height:120px;display:grid;place-items:center;text-align:center}
+.packageEditor label small{font-weight:400;color:var(--muted)}
