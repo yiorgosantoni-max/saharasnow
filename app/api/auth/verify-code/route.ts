@@ -23,6 +23,13 @@ export async function POST(req: NextRequest) {
       if (body.purpose !== "register" || (error as {code?: string})?.code !== "auth/user-not-found") throw error;
       user = await adminAuth.createUser({email,emailVerified:true}); created = true;
     }
+    if (!created) {
+      const profile = (await db.collection("users").doc(user.uid).get()).data() || {};
+      if (user.disabled || profile.accountStatus === "suspended") {
+        await ref.delete();
+        return NextResponse.json({error: "This account is suspended. Login is currently disabled."}, {status: 403});
+      }
+    }
     const profileUpdate:Record<string,unknown>={email,updatedAt:new Date()};
     if(created){profileUpdate.joinedAt=new Date();profileUpdate.mode="BUYING";profileUpdate.kycStatus="not-started";}
     await db.collection("users").doc(user.uid).set(profileUpdate,{merge:true});

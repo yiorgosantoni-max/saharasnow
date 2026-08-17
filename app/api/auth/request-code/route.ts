@@ -25,6 +25,13 @@ export async function POST(req: NextRequest) {
     if (purpose === "login" && !existingUser) {
       return NextResponse.json({error: "No account is registered with this email"}, {status: 404});
     }
+    if (purpose === "login" && existingUser) {
+      const profile = (await db.collection("users").doc(existingUser.uid).get()).data() || {};
+      if (existingUser.disabled || profile.accountStatus === "suspended") {
+        // Do not issue or email a login code to suspended users.
+        return NextResponse.json({error: "This account is suspended. Login is currently disabled."}, {status: 403});
+      }
+    }
     const code = randomInt(100000, 1000000).toString();
     const codeRef = db.collection("loginCodes").doc(email);
     const old = await codeRef.get();

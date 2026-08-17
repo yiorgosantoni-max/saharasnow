@@ -189,7 +189,14 @@ export async function PATCH(req: NextRequest) {
       await ref.delete();
     } else if (body.resource === "user") {
       if (!['suspend','restore'].includes(body.action)) throw new Error("INVALID_ACTION");
-      changes = {...changes,accountStatus:body.action === "suspend" ? "suspended" : "active",adminNote:body.note||""};
+      const suspended = body.action === "suspend";
+      changes = {...changes,accountStatus:suspended ? "suspended" : "active",adminNote:body.note||""};
+      await adminAuth.updateUser(body.id, {disabled:suspended});
+      if (suspended) {
+        // Prevent any already-issued login code from being used and revoke active sessions.
+        await db.collection("loginCodes").doc(String(current.email || "").toLowerCase()).delete();
+        await adminAuth.revokeRefreshTokens(body.id);
+      }
     }
 
     if (!writtenInTransaction && body.resource !== "listing" && body.resource !== "order" && body.resource !== "report") await ref.set(changes,{merge:true});
