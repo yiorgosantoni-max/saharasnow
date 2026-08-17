@@ -51,6 +51,14 @@ export async function PATCH(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   try {
     const user = await userFromRequest(req);
+    const requestedId = String(new URL(req.url).searchParams.get("id") || "");
+    if (requestedId) {
+      const ref = db.collection("notifications").doc(requestedId);
+      const snap = await ref.get();
+      if (!snap.exists || String(snap.data()?.userId) !== user.uid) return NextResponse.json({error:"Notification not found."},{status:404});
+      await ref.delete();
+      return NextResponse.json({ok:true,deleted:1});
+    }
     const snap = await db.collection("notifications").where("userId", "==", user.uid).get();
     let deleted = 0;
     for (let start = 0; start < snap.docs.length; start += 450) {
