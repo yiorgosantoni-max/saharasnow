@@ -47,7 +47,8 @@ export async function GET(req: NextRequest) {
       recent("orders").then((items: RecentItem[]) => items.filter((item: RecentItem) => ["paid","in-progress","delivered","disputed","completed-released","refunded"].includes(String(item.status)))),
       recent("supportTickets"), recent("users", 100), recent("auditLogs", 200), recent("contentReports", 200)
     ]);
-    return NextResponse.json({adminEmail: ADMIN_EMAIL, kyc, listings, withdrawals, orders, tickets, users, auditLogs, reports});
+    const earnings = users.map((user: RecentItem) => ({id:user.id,name:user.name,email:user.email,mode:user.mode||user.accountMode||"BUYING",totalEarningsCents:Number(user.totalEarningsCents||0),pendingEarningsCents:Number(user.pendingEarningsCents||0),availableBalanceCents:Number(user.availableBalanceCents||0),withdrawnCents:Number(user.withdrawnCents||0)}));
+    return NextResponse.json({adminEmail: ADMIN_EMAIL, kyc, listings, withdrawals, orders, tickets, users, earnings, auditLogs, reports});
   } catch (error) {
     const forbidden = error instanceof Error && (error.message === "ADMIN_FORBIDDEN" || error.message === "UNAUTHENTICATED");
     return NextResponse.json({error: forbidden ? "Only the SaharaSnow administrator can access this dashboard." : "Unable to load the admin dashboard."}, {status: forbidden ? 403 : 500});
