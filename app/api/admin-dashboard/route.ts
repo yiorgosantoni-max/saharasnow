@@ -41,6 +41,10 @@ async function recent(collection: string, limit = 100): Promise<Item[]> {
   return snap.docs.map(doc => jsonValue({id: doc.id, ...doc.data()}) as Item);
 }
 
+function emptyRow(id: string) {
+  return {id,name:"",email:"",mode:"SELLER",profileReleasedCents:0,profilePendingCents:0,orderReleasedCents:0,orderPendingCents:0,availableBalanceCents:0,withdrawnCents:0};
+}
+
 export async function GET(req: NextRequest) {
   try {
     const user = await userFromRequest(req);
@@ -55,43 +59,46 @@ export async function GET(req: NextRequest) {
     for (const u of users) {
       const name = [u.firstName, u.lastName].filter(Boolean).join(" ") || String(u.name || u.displayName || "");
       earnings.set(u.id, {
-        id: u.id, name, email: String(u.email || ""), mode: String(u.mode || u.accountMode || "BUYING"),
-        totalEarningsCents: firstAmount(u.totalEarningsCents, u.releasedEarningsCents, u.earningsCents),
-        pendingEarningsCents: firstAmount(u.pendingEarningsCents, u.pendingCents),
-        availableBalanceCents: firstAmount(u.availableBalanceCents, u.availableCents, u.balanceCents, u.sellerBalanceCents),
-        withdrawnCents: firstAmount(u.withdrawnCents)
+        ...emptyRow(u.id), id:u.id, name, email:String(u.email || ""), mode:String(u.mode || u.accountMode || "BUYING"),
+        profileReleasedCents:firstAmount(u.totalEarningsCents, u.releasedEarningsCents, u.earningsCents),
+        profilePendingCents:firstAmount(u.pendingEarningsCents, u.pendingCents),
+        availableBalanceCents:firstAmount(u.availableBalanceCents, u.availableCents, u.balanceCents, u.sellerBalanceCents),
+        withdrawnCents:firstAmount(u.withdrawnCents)
       });
     }
 
     for (const order of orders) {
       const sellerId = String(order.sellerId || "");
       if (!sellerId) continue;
-      if (!earnings.has(sellerId)) earnings.set(sellerId,{id:sellerId,name:"",email:"",mode:"SELLER",totalEarningsCents:0,pendingEarningsCents:0,availableBalanceCents:0,withdrawnCents:0});
+      if (!earnings.has(sellerId)) earnings.set(sellerId,emptyRow(sellerId));
       const row = earnings.get(sellerId);
       const status = String(order.status || "").toLowerCase();
       const gross = firstAmount(order.sellerNetCents, order.sellerEarningsCents, order.netCents, order.serviceCents, order.amountCents, order.totalCents);
-      if (RELEASED.has(status)) row.totalEarningsCents += gross;
-      else if (PENDING.has(status)) row.pendingEarningsCents += gross;
+      if (RELEASED.has(status)) row.orderReleasedCents += gross;
+      else if (PENDING.has(status)) row.orderPendingCents += gross;
     }
 
     for (const withdrawal of withdrawals) {
       const sellerId = String(withdrawal.sellerId || withdrawal.userId || "");
       if (!sellerId) continue;
-      if (!earnings.has(sellerId)) earnings.set(sellerId,{id:sellerId,name:"",email:"",mode:"SELLER",totalEarningsCents:0,pendingEarningsCents:0,availableBalanceCents:0,withdrawnCents:0});
+      if (!earnings.has(sellerId)) earnings.set(sellerId,emptyRow(sellerId));
       if (PAID_WITHDRAWAL.has(String(withdrawal.status || "").toLowerCase())) {
         earnings.get(sellerId).withdrawnCents += firstAmount(withdrawal.netCents, withdrawal.amountCents, withdrawal.grossCents);
       }
     }
 
-    const normalizedEarnings = [...earnings.values()].map(row => ({
-      ...row,
-      mode: row.mode === "BUYING" && (row.totalEarningsCents > 0 || row.pendingEarningsCents > 0 || row.availableBalanceCents > 0 || row.withdrawnCents > 0) ? "SELLER" : row.mode,
-      // Orders are the durable ledger. Do not allow an old zero profile field to hide released earnings.
-      totalEarningsCents: Math.max(0, row.totalEarningsCents),
-      pendingEarningsCents: Math.max(0, row.pendingEarningsCents),
-      availableBalanceCents: Math.max(0, row.availableBalanceCents),
-      withdrawnCents: Math.max(0, row.withdrawnCents)
-    }));
+    const normalizedEarnings = [...earnings.values()].map(row => {
+      const totalEarningsCents = Math.max(row.profileReleasedCents, row.orderReleasedCents);
+      const pendingEarningsCents = Math.max(row.profilePendingCents, row.orderPendingCents);
+      return {
+        id:row.id,name:row.name,email:row.email,
+        mode:row.mode === "BUYING" && (totalEarningsCents > 0 || pendingEarningsCents > 0 || row.availableBalanceCents > 0 || row.withdrawnCents > 0) ? "SELLER" : row.mode,
+        totalEarningsCents:Math.max(0,totalEarningsCents),
+        pendingEarningsCents:Math.max(0,pendingEarningsCents),
+        availableBalanceCents:Math.max(0,row.availableBalanceCents),
+        withdrawnCents:Math.max(0,row.withdrawnCents)
+      };
+    });
 
     const visibleOrders = orders.filter(item => ["paid","in-progress","delivered","disputed","completed-released","released","completed","refunded"].includes(String(item.status)));
     return NextResponse.json({adminEmail:ADMIN_EMAIL,kyc,listings,withdrawals,orders:visibleOrders,tickets,users,earnings:normalizedEarnings,auditLogs,reports});
