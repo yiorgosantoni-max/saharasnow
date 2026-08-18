@@ -1,26 +1,13 @@
-/* Gentle motion for the SaharaSnow bird in the homepage welcome card. */
+/* Keep the SaharaSnow bird on the homepage welcome card completely static. */
 main img[src="/logo.png"]{
   display:block;
   transform-origin:50% 62%;
-  animation:saharaBirdFloat 4.8s ease-in-out infinite;
-  will-change:transform,filter;
+  transform:none;
+  animation:none !important;
+  will-change:auto;
   filter:drop-shadow(0 10px 12px rgba(23,21,74,.10));
 }
 main img[src="/logo.png"]:hover{
-  animation:saharaBirdHello .75s ease-in-out;
-}
-@keyframes saharaBirdFloat{
-  0%,100%{transform:translateY(0) rotate(0deg) scale(1);filter:drop-shadow(0 10px 12px rgba(23,21,74,.10))}
-  28%{transform:translateY(-7px) rotate(-1.2deg) scale(1.012)}
-  52%{transform:translateY(-11px) rotate(.9deg) scale(1.018);filter:drop-shadow(0 18px 17px rgba(23,21,74,.14))}
-  76%{transform:translateY(-5px) rotate(-.55deg) scale(1.008)}
-}
-@keyframes saharaBirdHello{
-  0%,100%{transform:translateY(0) rotate(0deg) scale(1)}
-  22%{transform:translateY(-5px) rotate(-3deg) scale(1.035)}
-  46%{transform:translateY(-9px) rotate(2.5deg) scale(1.055)}
-  70%{transform:translateY(-4px) rotate(-1deg) scale(1.025)}
-}
-@media(prefers-reduced-motion:reduce){
-  main img[src="/logo.png"],main img[src="/logo.png"]:hover{animation:none!important}
+  transform:none;
+  animation:none !important;
 }
