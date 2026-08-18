@@ -29,6 +29,17 @@ export function countryCode(value: unknown): string {
   return "";
 }
 
+/**
+ * URL for a real flag image instead of relying on OS/browser emoji support.
+ * This makes flags render consistently in Edge, Safari, Chrome and Firefox.
+ */
+export function countryFlagUrl(value: unknown, width = 40): string {
+  const code = countryCode(value).toLowerCase();
+  if (!/^[a-z]{2}$/.test(code)) return "";
+  return `https://flagcdn.com/w${Math.max(20, Math.round(width))}/${code}.png`;
+}
+
+/** Legacy text fallback for places that still render a country as text. */
 export function countryFlag(value: unknown, fallback = "📍"): string {
   const code = countryCode(value);
   return /^[A-Z]{2}$/.test(code) ? String.fromCodePoint(...[...code].map((char) => 127397 + char.charCodeAt(0))) : fallback;
