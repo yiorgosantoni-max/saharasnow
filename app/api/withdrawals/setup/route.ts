@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticator } from "otplib";
-import QRCode from "qrcode";
 import { db } from "@/lib/firebase-admin";
 import { publicError, userFromRequest } from "@/lib/server";
 
@@ -22,12 +21,7 @@ export async function POST(req: NextRequest) {
 
     const secret = String(profile.totpSecret || authenticator.generateSecret());
     const email = user.email || profile.email || `seller-${user.uid.slice(0, 8)}@saharasnow.com`;
-    const uri = authenticator.keyuri(email, ISSUER, secret);
-    const qrDataUrl = await QRCode.toDataURL(uri, {
-      errorCorrectionLevel: "M",
-      margin: 2,
-      width: 280,
-    });
+    const otpauthUri = authenticator.keyuri(email, ISSUER, secret);
 
     await profileRef.set({
       totpSecret: secret,
@@ -37,7 +31,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       enabled: false,
-      qrDataUrl,
+      otpauthUri,
       secretKey: secret,
       account: email,
       issuer: ISSUER,
