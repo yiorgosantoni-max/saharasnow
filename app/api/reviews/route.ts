@@ -6,11 +6,15 @@ import { publicError, userFromRequest } from "@/lib/server";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-type ReviewData = {
-  id: string;
-  createdAt?: { toMillis?: () => number } | null;
-  [key: string]: unknown;
-};
+type ReviewData = Record<string, unknown> & { id: string };
+
+function timestampMillis(value: unknown): number {
+  if (value && typeof value === "object" && "toMillis" in value) {
+    const fn = (value as { toMillis?: unknown }).toMillis;
+    if (typeof fn === "function") return Number(fn.call(value)) || 0;
+  }
+  return 0;
+}
 
 export async function GET(req: NextRequest) {
   try {
@@ -51,11 +55,7 @@ export async function GET(req: NextRequest) {
     const seller = sellerSnap.data() || {};
     const reviews: ReviewData[] = snap.docs
       .map((d) => ({ id: d.id, ...(d.data() as Record<string, unknown>) }))
-      .sort((a, b) => {
-        const aa = typeof a.createdAt?.toMillis === "function" ? a.createdAt.toMillis() : 0;
-        const bb = typeof b.createdAt?.toMillis === "function" ? b.createdAt.toMillis() : 0;
-        return bb - aa;
-      });
+      .sort((a, b) => timestampMillis(b.createdAt) - timestampMillis(a.createdAt));
 
     const count = Number(seller.reviewCount || 0);
     const sum = Number(seller.reviewRatingSum || 0);
