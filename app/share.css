@@ -1,20 +1,14 @@
 .visual .favouriteButton{right:5px;top:5px}
-.cardShare{position:absolute;right:32px;top:5px;z-index:20}
-.visual .shareToggle{position:static;display:grid;place-items:center;font-size:12px}
-.shareMenu{position:absolute;right:0;top:26px;width:130px;padding:5px;background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:0 15px 35px #17154a30;display:grid;gap:2px;z-index:100}
+.cardShare{position:absolute !important;right:40px !important;top:5px !important;z-index:40 !important;display:block !important;visibility:visible !important;opacity:1 !important}
+.visual .shareToggle{position:static !important;display:grid !important;place-items:center;font-size:12px;visibility:visible !important;opacity:1 !important;pointer-events:auto !important}
+.shareMenu{position:absolute;right:0;top:34px;width:150px;padding:6px;background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:0 15px 35px #17154a30;display:grid !important;gap:2px;z-index:1000}
 .visual .shareMenu button{position:static;width:100%;height:auto;border-radius:7px;background:#fff;color:var(--ink);padding:9px 10px;text-align:left;font-size:12px;font-weight:700}
 .visual .shareMenu button:hover,.visual .shareMenu button:focus-visible{background:#f3f1fb;outline:none}
-.grid article:has(.shareMenu){overflow:visible}
-.grid article:has(.shareMenu) .visual{overflow:visible}
-[dir="rtl"] .cardShare{right:auto;left:32px}
+.grid article:has(.shareMenu),.grid article:has(.cardShare){overflow:visible}
+.grid article:has(.shareMenu) .visual,.grid article:has(.cardShare) .visual{overflow:visible}
+[dir="rtl"] .cardShare{right:auto !important;left:40px !important}
 [dir="rtl"] .visual .favouriteButton{right:auto;left:5px}
 [dir="rtl"] .shareMenu{right:auto;left:0}
 [dir="rtl"] .visual .shareMenu button{text-align:right}
-
-/* Homepage launch card: animate the actual SaharaSnow bird image. */
-.launchVisual{position:relative;isolation:isolate}
-.launchVisual>img{display:block;transform-origin:50% 62%;will-change:transform,filter;animation:saharasnowBirdFloat 3.8s ease-in-out infinite !important}
-.launchVisual>img:hover{animation:saharasnowBirdHello .9s ease-in-out 1 !important}
-@keyframes saharasnowBirdFloat{0%,100%{transform:translate3d(0,0,0) rotate(-1deg) scale(1)}25%{transform:translate3d(0,-7px,0) rotate(1deg) scale(1.012)}50%{transform:translate3d(0,-12px,0) rotate(-.5deg) scale(1.02)}75%{transform:translate3d(0,-6px,0) rotate(.8deg) scale(1.012)}}
-@keyframes saharasnowBirdHello{0%,100%{transform:translate3d(0,0,0) rotate(0) scale(1)}20%{transform:translate3d(-3px,-10px,0) rotate(-4deg) scale(1.05)}45%{transform:translate3d(3px,-14px,0) rotate(4deg) scale(1.06)}70%{transform:translate3d(-2px,-8px,0) rotate(-2deg) scale(1.035)}}
-@media (prefers-reduced-motion:reduce){.launchVisual>img{animation:none !important}}
+/* Homepage launch bird remains static. */
+.launchVisual>img{animation:none !important;transform:none !important}
