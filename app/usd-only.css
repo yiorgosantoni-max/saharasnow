@@ -1,0 +1,10 @@
+/* Saharasnow uses USD everywhere. Legacy currency conversion UI is disabled. */
+select[aria-label="Currency"],
+.currencySwitcher,
+.currency-switcher,
+[data-currency-switcher],
+[data-currency-converter]{display:none!important}
+
+/* Remove the legacy live-conversion demo rather than presenting converted values. */
+.growthSuite .suiteNav button:first-child,
+.growthSuite .conversion{display:none!important}
