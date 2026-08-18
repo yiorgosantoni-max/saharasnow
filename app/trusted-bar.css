@@ -1,0 +1,27 @@
+/* SaharaSnow trust bar */
+.trusted{
+  min-height:82px;
+  height:auto;
+  padding:12px max(4vw,24px);
+  gap:clamp(18px,4vw,64px);
+  background:linear-gradient(90deg,#fff 0%,#fffaf7 48%,#f8f8ff 100%);
+  color:#716f82;
+  box-shadow:0 1px 0 rgba(23,21,74,.04);
+}
+.trusted>*{display:inline-flex!important;align-items:center;gap:8px;white-space:nowrap;letter-spacing:.01em}
+.trusted>*:first-child{font-size:0!important;font-weight:800;color:#17154a!important}
+.trusted>*:first-child::before{content:"";width:34px;height:34px;display:inline-block;background:url('/logo.png') center/contain no-repeat;filter:drop-shadow(0 3px 6px rgba(23,21,74,.12))}
+.trusted>*:first-child::after{content:"SaharaSnow";font-size:16px;font-weight:800;letter-spacing:-.25px;color:#17154a}
+.trusted>*:nth-child(2)::before{content:"🔒";font-size:17px;line-height:1}
+.trusted>*:nth-child(3)::before{content:"💬";font-size:17px;line-height:1}
+.trusted>*:nth-child(4)::before{content:"🛡️";font-size:17px;line-height:1}
+.trusted>*:nth-child(5){font-size:0!important}
+.trusted>*:nth-child(5)::before{content:"⭐";font-size:17px;line-height:1}
+.trusted>*:nth-child(5)::after{content:"Star reviews";font-size:17px;font-weight:700;color:#777486}
+@media(max-width:760px){
+  .trusted{justify-content:flex-start;gap:18px;overflow-x:auto;scrollbar-width:none}
+  .trusted::-webkit-scrollbar{display:none}
+  .trusted>*{font-size:14px!important}
+  .trusted>*:first-child{font-size:0!important}
+  .trusted>*:nth-child(5){font-size:0!important}
+}
