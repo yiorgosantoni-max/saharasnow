@@ -13,9 +13,9 @@ export async function GET(req:NextRequest){
   const listingSnap=await db.collection("listings").doc(listingId).get();
   if(!listingSnap.exists)return NextResponse.json({error:"Listing not found"},{status:404});
   const sellerId=String(listingSnap.data()?.sellerId||"");
-  if(!sellerId)return NextResponse.json({orderCount:0});
+  if(!sellerId)return NextResponse.json({sellerId:"",orderCount:0});
   const orders=await db.collection("orders").where("sellerId","==",sellerId).limit(500).get();
   const orderCount=orders.docs.reduce((count,doc)=>count+(countedStatuses.has(String(doc.data()?.status||""))?1:0),0);
-  return NextResponse.json({orderCount});
- }catch{return NextResponse.json({orderCount:0});}
+  return NextResponse.json({sellerId,orderCount});
+ }catch{return NextResponse.json({sellerId:"",orderCount:0});}
 }
