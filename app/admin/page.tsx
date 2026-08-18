@@ -1,253 +1,28 @@
 "use client";
-
-import { useEffect, useMemo, useState } from "react";
+import { useEffect,useMemo,useState } from "react";
 import Link from "next/link";
 import "./admin.css";
-
-type Item = Record<string, unknown> & { id: string };
-type Data = {
-  adminEmail: string;
-  kyc: Item[];
-  listings: Item[];
-  withdrawals: Item[];
-  orders: Item[];
-  tickets: Item[];
-  users: Item[];
-  earnings: Item[];
-  auditLogs: Item[];
-  reports: Item[];
-};
-type Tab = "kyc" | "listings" | "withdrawals" | "orders" | "tickets" | "users" | "earnings" | "reports" | "auditLogs";
-type AuthUser = { getIdToken: (forceRefresh?: boolean) => Promise<string> };
-
-const labels: Record<Tab, string> = {
-  kyc: "KYC",
-  listings: "Listings",
-  withdrawals: "Withdrawals",
-  orders: "Orders & disputes",
-  tickets: "Support",
-  users: "Users",
-  earnings: "Earnings",
-  reports: "Reports",
-  auditLogs: "Audit log",
-};
-
-const resource: Partial<Record<Tab, string>> = {
-  kyc: "kyc",
-  listings: "listing",
-  withdrawals: "withdrawal",
-  orders: "order",
-  tickets: "ticket",
-  users: "user",
-  reports: "report",
-};
-
-const actions: Partial<Record<Tab, { label: string; action: string; danger?: boolean }[]>> = {
-  kyc: [
-    { label: "Approve", action: "approve" },
-    { label: "Request new documents", action: "reupload", danger: true },
-    { label: "Reject", action: "reject", danger: true },
-  ],
-  listings: [
-    { label: "Publish", action: "approve" },
-    { label: "Reject", action: "reject", danger: true },
-    { label: "Delete", action: "delete", danger: true },
-  ],
-  withdrawals: [
-    { label: "Mark paid", action: "paid" },
-    { label: "Reject & restore balance", action: "reject", danger: true },
-  ],
-  orders: [
-    { label: "Release to seller", action: "release" },
-    { label: "Mark refunded", action: "refund", danger: true },
-    { label: "Delete", action: "delete", danger: true },
-  ],
-  tickets: [{ label: "Close ticket", action: "close" }],
-  users: [
-    { label: "Restore", action: "restore" },
-    { label: "Suspend", action: "suspend", danger: true },
-  ],
-  reports: [{ label: "Delete report", action: "delete", danger: true }],
-};
-
-const emptyData = (): Data => ({
-  adminEmail: "",
-  kyc: [],
-  listings: [],
-  withdrawals: [],
-  orders: [],
-  tickets: [],
-  users: [],
-  earnings: [],
-  auditLogs: [],
-  reports: [],
-});
-
-const text = (value: unknown) => {
-  if (value === null || value === undefined || value === "") return "—";
-  if (typeof value === "object") {
-    try { return JSON.stringify(value); } catch { return "—"; }
-  }
-  return String(value);
-};
-
-const money = (value: unknown) => {
-  const n = Number(value);
-  return Number.isFinite(n) ? `€${(n / 100).toFixed(2)}` : "€0.00";
-};
-
-export default function AdminPage() {
-  const [data, setData] = useState<Data | null>(null);
-  const [tab, setTab] = useState<Tab>("listings");
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState("");
-  const [authUser, setAuthUser] = useState<AuthUser | null>(null);
-  const [search, setSearch] = useState("");
-
-  const load = async (user: AuthUser) => {
-    setError("");
-    try {
-      const token = await user.getIdToken(true);
-      const response = await fetch("/api/admin", {
-        headers: { authorization: `Bearer ${token}` },
-        cache: "no-store",
-      });
-      const body = await response.text();
-      let result: Partial<Data> & { error?: string } = {};
-      try { result = body ? JSON.parse(body) : {}; }
-      catch { throw new Error(`Admin service returned invalid data (${response.status}).`); }
-      if (!response.ok) throw new Error(result.error || `Admin service returned ${response.status}.`);
-      setData({
-        adminEmail: String(result.adminEmail || ""),
-        kyc: Array.isArray(result.kyc) ? result.kyc : [],
-        listings: Array.isArray(result.listings) ? result.listings : [],
-        withdrawals: Array.isArray(result.withdrawals) ? result.withdrawals : [],
-        orders: Array.isArray(result.orders) ? result.orders : [],
-        tickets: Array.isArray(result.tickets) ? result.tickets : [],
-        users: Array.isArray(result.users) ? result.users : [],
-        earnings: Array.isArray(result.earnings) ? result.earnings : [],
-        auditLogs: Array.isArray(result.auditLogs) ? result.auditLogs : [],
-        reports: Array.isArray(result.reports) ? result.reports : [],
-      });
-    } catch (e) {
-      setData(null);
-      setError(e instanceof Error ? e.message : "Unable to load admin dashboard.");
-    }
-  };
-
-  useEffect(() => {
-    let stopped = false;
-    let unsubscribe: (() => void) | undefined;
-    (async () => {
-      try {
-        const [{ getClientAuth }, auth] = await Promise.all([
-          import("@/lib/firebase-client"),
-          import("firebase/auth"),
-        ]);
-        if (stopped) return;
-        const clientAuth = getClientAuth();
-        unsubscribe = auth.onAuthStateChanged(clientAuth, (user) => {
-          if (stopped) return;
-          if (user) {
-            const safeUser: AuthUser = { getIdToken: (forceRefresh) => user.getIdToken(forceRefresh) };
-            setAuthUser(safeUser);
-            void load(safeUser);
-          } else {
-            setAuthUser(null);
-            setData(null);
-            setError("Sign in with your administrator account on the homepage first.");
-          }
-        });
-      } catch (e) {
-        if (!stopped) setError(e instanceof Error ? e.message : "Unable to initialize administrator sign-in.");
-      }
-    })();
-    return () => { stopped = true; unsubscribe?.(); };
-  }, []);
-
-  const rows = useMemo(() => {
-    const list = data?.[tab] || [];
-    if (!search.trim()) return list;
-    const q = search.toLowerCase();
-    return list.filter((item) => JSON.stringify(item).toLowerCase().includes(q));
-  }, [data, tab, search]);
-
-  const act = async (item: Item, action: string) => {
-    if (!authUser) { setError("Administrator authentication is not ready. Refresh and sign in again."); return; }
-    if (action === "delete" && !window.confirm(`Delete ${text(item.title || item.orderNumber || item.id)} permanently?`)) return;
-    const entered = window.prompt(action === "reupload" ? "Explain which newer or clearer documents the user must upload:" : "Optional admin note:");
-    if (entered === null) return;
-    if (action === "reupload" && !entered.trim()) { setError("Enter a reason for the new documents."); return; }
-    setBusy(`${item.id}:${action}`);
-    try {
-      const token = await authUser.getIdToken(true);
-      const response = await fetch("/api/admin", {
-        method: "PATCH",
-        headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
-        body: JSON.stringify({ resource: resource[tab], id: item.id, action, note: entered.trim() }),
-      });
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(result.error || "Admin action failed.");
-      await load(authUser);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Admin action failed.");
-    } finally {
-      setBusy("");
-    }
-  };
-
-  const logout = async () => {
-    try {
-      const { signOutUser } = await import("@/lib/firebase-client");
-      await signOutUser();
-      window.location.href = "/";
-    } catch { setError("Unable to log out."); }
-  };
-
-  const earningsTotals = useMemo(() => {
-    return rows.reduce((acc, item) => {
-      acc.released += Number(item.totalReleasedCents ?? item.releasedCents ?? 0) || 0;
-      acc.pending += Number(item.pendingCents ?? 0) || 0;
-      acc.available += Number(item.availableCents ?? 0) || 0;
-      return acc;
-    }, { released: 0, pending: 0, available: 0 });
-  }, [rows]);
-
-  return (
-    <main className="adminShell">
-      <header className="adminHeader">
-        <Link href="/" className="brand">saharasnow</Link>
-        <div><b>Admin control centre</b><small>{data?.adminEmail || "Secure administrator access"}</small></div>
-        <div className="adminHeaderActions"><button onClick={() => authUser && void load(authUser)}>Refresh</button><button className="adminLogout" onClick={logout}>Log out</button></div>
-      </header>
-
-      <section className="adminHero">
-        <div><span>LIVE OPERATIONS</span><h1>Marketplace administration</h1><p>Manage marketplace operations, financials, users and trust controls.</p></div>
-        <div className="adminStats">
-          <b>{data?.kyc.length || 0}<small>KYC</small></b>
-          <b>{data?.listings.length || 0}<small>Listings</small></b>
-          <b>{data?.withdrawals.length || 0}<small>Withdrawals</small></b>
-          <b>{data?.users.length || 0}<small>Users</small></b>
-        </div>
-      </section>
-
-      {error && <div className="adminError" role="alert">{error}</div>}
-
-      <nav className="adminTabs" aria-label="Admin sections">
-        {(Object.keys(labels) as Tab[]).map((key) => <button key={key} className={tab === key ? "active" : ""} onClick={() => { setTab(key); setSearch(""); }}>{labels[key]} <span>{data?.[key]?.length || 0}</span></button>)}
-      </nav>
-
-      <section className="adminPanel">
-        <div className="adminPanelHead"><div><h2>{labels[tab]}</h2><p>{rows.length} record{rows.length === 1 ? "" : "s"}</p></div><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search this section…" /></div>
-
-        {tab === "earnings" && <div className="earningsSummary"><div><span>Released</span><strong>{money(earningsTotals.released)}</strong></div><div><span>Pending</span><strong>{money(earningsTotals.pending)}</strong></div><div><span>Available</span><strong>{money(earningsTotals.available)}</strong></div></div>}
-
-        {rows.length === 0 ? <div className="adminEmpty">No records found.</div> : tab === "earnings" ? (
-          <div className="adminTableWrap"><table className="adminTable"><thead><tr><th>User</th><th>Email</th><th>Released</th><th>Pending</th><th>Available</th><th>Withdrawn</th></tr></thead><tbody>{rows.map((item) => <tr key={item.id}><td>{text(item.displayName || item.name || item.userName || item.id)}</td><td>{text(item.email || item.userEmail)}</td><td>{money(item.totalReleasedCents ?? item.releasedCents)}</td><td>{money(item.pendingCents)}</td><td>{money(item.availableCents)}</td><td>{money(item.withdrawnCents)}</td></tr>)}</tbody></table></div>
-        ) : (
-          <div className="adminRows">{rows.map((item) => <article className="adminRow" key={item.id}><div className="adminRowMain"><strong>{text(item.title || item.name || item.subject || item.orderNumber || item.email || item.id)}</strong><small>{text(item.email || item.status || item.category || item.createdAt)}</small><p>{text(item.description || item.reason || item.message || item.note || "")}</p></div><div className="adminRowActions">{(actions[tab] || []).map((a) => <button key={a.action} disabled={busy === `${item.id}:${a.action}`} className={a.danger ? "danger" : ""} onClick={() => void act(item, a.action)}>{busy === `${item.id}:${a.action}` ? "Working…" : a.label}</button>)}</div></article>)}</div>
-        )}
-      </section>
-    </main>
-  );
-}
+type Item=Record<string,unknown>&{id:string};
+type Tab="kyc"|"listings"|"reviews"|"withdrawals"|"orders"|"tickets"|"users"|"earnings"|"reports"|"auditLogs";
+type Data={adminEmail:string;kyc:Item[];listings:Item[];reviews:Item[];withdrawals:Item[];orders:Item[];tickets:Item[];users:Item[];earnings:Item[];auditLogs:Item[];reports:Item[]};
+type Auth={getIdToken:(force?:boolean)=>Promise<string>};
+const labels:Record<Tab,string>={kyc:"KYC 4",listings:"Listings",reviews:"Reviews",withdrawals:"Withdrawals",orders:"Orders & disputes",tickets:"Support",users:"Users",earnings:"Earnings",reports:"Reports",auditLogs:"Audit log"};
+const tabs=Object.keys(labels) as Tab[];
+const money=(v:unknown)=>`$${(Number(v||0)/100).toFixed(2)}`;
+const txt=(v:unknown)=>v===undefined||v===null||v===""?"—":typeof v==="object"?JSON.stringify(v):String(v);
+function urls(value:unknown,path="document"): {name:string;url:string}[]{if(typeof value==="string"&&/^https?:\/\//.test(value))return[{name:path,url:value}];if(Array.isArray(value))return value.flatMap((x,i)=>urls(x,`${path} ${i+1}`));if(value&&typeof value==="object")return Object.entries(value as Record<string,unknown>).flatMap(([k,v])=>urls(v,k));return[];}
+export default function AdminPage(){const[data,setData]=useState<Data|null>(null);const[tab,setTab]=useState<Tab>("listings");const[auth,setAuth]=useState<Auth|null>(null);const[error,setError]=useState("");const[busy,setBusy]=useState("");const[search,setSearch]=useState("");
+const load=async(u:Auth)=>{setError("");try{const token=await u.getIdToken(true);const[h,r]=await Promise.all([fetch("/api/admin",{headers:{authorization:`Bearer ${token}`},cache:"no-store"}),fetch("/api/admin/reviews",{headers:{authorization:`Bearer ${token}`},cache:"no-store"})]);const a=await h.json();const rr=await r.json();if(!h.ok)throw new Error(a.error||"Unable to load admin dashboard.");setData({adminEmail:String(a.adminEmail||""),kyc:a.kyc||[],listings:a.listings||[],reviews:rr.reviews||[],withdrawals:a.withdrawals||[],orders:a.orders||[],tickets:a.tickets||[],users:a.users||[],earnings:a.earnings||[],auditLogs:a.auditLogs||[],reports:a.reports||[]});}catch(e){setError(e instanceof Error?e.message:"Unable to load admin dashboard.");}};
+useEffect(()=>{let off:(()=>void)|undefined;(async()=>{try{const[{getClientAuth},fa]=await Promise.all([import("@/lib/firebase-client"),import("firebase/auth")]);off=fa.onAuthStateChanged(getClientAuth(),u=>{if(u){const x:Auth={getIdToken:f=>u.getIdToken(f)};setAuth(x);void load(x);}else setError("Sign in with your administrator account first.");});}catch(e){setError(e instanceof Error?e.message:"Unable to initialize admin.");}})();return()=>off?.();},[]);
+const rows=useMemo(()=>{const all=data?.[tab]||[];const q=search.trim().toLowerCase();return q?all.filter(x=>JSON.stringify(x).toLowerCase().includes(q)):all;},[data,tab,search]);
+const users=useMemo(()=>new Map((data?.users||[]).map(u=>[u.id,u])),[data]);
+const patch=async(item:Item,resource:string,action:string,noteRequired=false)=>{if(!auth)return;const note=window.prompt(noteRequired?"Enter the reason:":"Optional admin note:");if(note===null||(noteRequired&&!note.trim()))return;setBusy(`${item.id}:${action}`);try{const token=await auth.getIdToken(true);const res=await fetch("/api/admin",{method:"PATCH",headers:{"content-type":"application/json",authorization:`Bearer ${token}`},body:JSON.stringify({resource,id:item.id,action,note:note.trim()})});const out=await res.json();if(!res.ok)throw new Error(out.error||"Admin action failed.");await load(auth);}catch(e){setError(e instanceof Error?e.message:"Admin action failed.");}finally{setBusy("");}};
+const reviewAction=async(item:Item,action:"delete"|"reset")=>{if(!auth)return;if(action==="delete"&&!window.confirm("Delete this review permanently?"))return;const note=window.prompt(action==="reset"?"Why should the buyer submit a new review?":"Optional admin note:");if(note===null||(action==="reset"&&!note.trim()))return;setBusy(`${item.id}:${action}`);try{const token=await auth.getIdToken(true);const res=await fetch("/api/admin/reviews",{method:"PATCH",headers:{"content-type":"application/json",authorization:`Bearer ${token}`},body:JSON.stringify({reviewId:item.id,action,note:note.trim()})});const out=await res.json();if(!res.ok)throw new Error(out.error||"Review action failed.");await load(auth);}catch(e){setError(e instanceof Error?e.message:"Review action failed.");}finally{setBusy("");}};
+const clearAudit=async()=>{if(!auth||!window.confirm("Clear the entire audit log? This cannot be undone."))return;setBusy("audit:clear");try{const token=await auth.getIdToken(true);const res=await fetch("/api/admin",{method:"PATCH",headers:{"content-type":"application/json",authorization:`Bearer ${token}`},body:JSON.stringify({resource:"auditLogs",id:"all",action:"clearAll"})});if(!res.ok)throw new Error((await res.json()).error||"Unable to clear audit log.");await load(auth);}catch(e){setError(e instanceof Error?e.message:"Unable to clear audit log.");}finally{setBusy("");}};
+const earningsTotals=rows.reduce((a,x)=>({released:a.released+Number(x.totalEarningsCents||x.totalReleasedCents||x.releasedCents||0),pending:a.pending+Number(x.pendingEarningsCents||x.pendingCents||0),available:a.available+Number(x.availableBalanceCents||x.availableCents||0)}),{released:0,pending:0,available:0});
+return <main className="adminShell"><header className="adminHeader"><Link href="/" className="brand">saharasnow</Link><div><b>Admin control centre</b><small>{data?.adminEmail||"Secure administrator access"}</small></div><div className="adminHeaderActions"><button onClick={()=>auth&&void load(auth)}>Refresh</button></div></header><section className="adminHero"><div><span>LIVE OPERATIONS</span><h1>Marketplace administration</h1><p>Manage trust, services, reviews, earnings and marketplace records.</p></div></section>{error&&<div className="adminError">{error}</div>}<nav className="adminTabs">{tabs.map(t=><button key={t} className={tab===t?"active":""} onClick={()=>{setTab(t);setSearch("");}}>{labels[t]} <span>{data?.[t]?.length||0}</span></button>)}</nav><section className="adminPanel"><div className="adminPanelHead"><div><h2>{labels[tab]}</h2><p>{rows.length} record{rows.length===1?"":"s"}</p></div><div style={{display:"flex",gap:8}}>{tab==="auditLogs"&&<button className="danger" disabled={busy==="audit:clear"} onClick={()=>void clearAudit()}>Clear everything</button>}<input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search this section…" /></div></div>
+{tab==="earnings"&&<><div className="earningsSummary"><div><span>Released</span><strong>{money(earningsTotals.released)}</strong></div><div><span>Pending</span><strong>{money(earningsTotals.pending)}</strong></div><div><span>Available</span><strong>{money(earningsTotals.available)}</strong></div></div><div className="adminTableWrap"><table className="adminTable"><thead><tr><th>User</th><th>Email</th><th>Released</th><th>Pending</th><th>Available</th><th>Withdrawn</th></tr></thead><tbody>{rows.map(x=>{const u=users.get(x.id)||x;return <tr key={x.id}><td>{txt(x.name||x.displayName||u.firstName&&`${u.firstName} ${u.lastName||""}`||x.id)}</td><td>{txt(x.email||u.email)}</td><td>{money(x.totalEarningsCents||x.totalReleasedCents||x.releasedCents)}</td><td>{money(x.pendingEarningsCents||x.pendingCents)}</td><td>{money(x.availableBalanceCents||x.availableCents)}</td><td>{money(x.withdrawnCents)}</td></tr>;})}</tbody></table></div></>}
+{tab!=="earnings"&&(rows.length===0?<div className="adminEmpty">No records found.</div>:<div className="adminRows">{rows.map(item=>{if(tab==="reviews")return <article className="adminRow" key={item.id}><div className="adminRowMain"><strong>⭐ {txt(item.rating)}/5 — {txt(item.reviewerName||item.buyerName||item.buyerId)}</strong><small>Seller: {txt(item.sellerId)} · Order: {txt(item.orderId)}</small><p>{txt(item.text||item.comment)}</p></div><div className="adminRowActions"><button className="danger" disabled={busy===`${item.id}:delete`} onClick={()=>void reviewAction(item,"delete")}>Delete review</button><button disabled={busy===`${item.id}:reset`} onClick={()=>void reviewAction(item,"reset")}>Request new review</button></div></article>;
+if(tab==="kyc"){const docs=urls(item).filter(d=>/document|id|passport|selfie|proof|upload|file|front|back/i.test(d.name));return <article className="adminRow" key={item.id}><div className="adminRowMain"><strong>{txt(item.name||item.email||item.userId||item.id)}</strong><small>Status: {txt(item.status)} · {txt(item.email)}</small><p>{txt(item.reviewNote||item.createdAt)}</p>{docs.length>0&&<div style={{display:"flex",gap:8,flexWrap:"wrap",marginTop:10}}>{docs.map((d,i)=><a key={i} href={d.url} target="_blank" rel="noreferrer"><button>⬇ Download {d.name}</button></a>)}</div>}</div><div className="adminRowActions"><button onClick={()=>void patch(item,"kyc","approve")}>Approve</button><button onClick={()=>void patch(item,"kyc","reupload",true)}>Request new documents</button><button className="danger" onClick={()=>void patch(item,"kyc","reject")}>Reject</button></div></article>}
+if(tab==="listings"){const seller=users.get(String(item.sellerId||item.userId||""));const name=seller?[seller.firstName,seller.lastName].filter(Boolean).join(" ")||txt(seller.name||seller.displayName):txt(item.sellerName||item.sellerId);const pic=seller&&(seller.photoURL||seller.profileImage||seller.avatarUrl);return <article className="adminRow" key={item.id}><div className="adminRowMain"><div style={{display:"flex",alignItems:"center",gap:10}}>{typeof pic==="string"?<img src={pic} alt="" width={44} height={44} style={{borderRadius:"50%",objectFit:"cover"}}/>:<div style={{width:44,height:44,borderRadius:"50%",background:"#e9ecf7",display:"grid",placeItems:"center"}}>👤</div>}<div><strong>{txt(item.title)}</strong><small>{name} · {txt(seller?.email||item.email||item.sellerEmail)}</small></div></div><p>{txt(item.status)} · {txt(item.category)}</p></div><div className="adminRowActions"><button onClick={()=>void patch(item,"listing","approve")}>Publish</button><button className="danger" onClick={()=>void patch(item,"listing","reject")}>Reject</button><button className="danger" onClick={()=>void patch(item,"listing","delete")}>Delete</button></div></article>}
+const resource=tab==="withdrawals"?"withdrawal":tab==="orders"?"order":tab==="tickets"?"ticket":tab==="users"?"user":tab==="reports"?"report":"";const acts=tab==="withdrawals"?[['Mark paid','paid'],['Reject & restore','reject']]:tab==="orders"?[['Release','release'],['Refund','refund'],['Delete','delete']]:tab==="tickets"?[['Close','close']]:tab==="users"?[['Restore','restore'],['Suspend','suspend']]:tab==="reports"?[['Delete','delete']]:[];return <article className="adminRow" key={item.id}><div className="adminRowMain"><strong>{txt(item.title||item.name||item.subject||item.orderNumber||item.email||item.id)}</strong><small>{txt(item.email||item.status||item.category||item.createdAt)}</small><p>{txt(item.description||item.reason||item.message||item.note)}</p></div><div className="adminRowActions">{acts.map(([label,action])=><button key={action} className={/reject|refund|delete|suspend/i.test(action)?"danger":""} disabled={busy===`${item.id}:${action}`} onClick={()=>void patch(item,resource,action,/reject|refund/i.test(action))}>{label}</button>)}</div></article>;})}</div>)}</section></main>}
