@@ -31,12 +31,17 @@ export function countryCode(value: unknown): string {
 
 /**
  * URL for a real flag image instead of relying on OS/browser emoji support.
- * This makes flags render consistently in Edge, Safari, Chrome and Firefox.
+ * FlagCDN only supports fixed widths, so map arbitrary requested widths to a
+ * valid asset size. This keeps flags working consistently in Edge, Safari,
+ * Chrome and Firefox, including the seller profile which requests 48px.
  */
 export function countryFlagUrl(value: unknown, width = 40): string {
   const code = countryCode(value).toLowerCase();
   if (!/^[a-z]{2}$/.test(code)) return "";
-  return `https://flagcdn.com/w${Math.max(20, Math.round(width))}/${code}.png`;
+  const supportedWidths = [20, 40, 80, 160, 320, 640];
+  const requested = Math.max(20, Math.round(Number(width) || 40));
+  const assetWidth = supportedWidths.find(size => size >= requested) ?? 640;
+  return `https://flagcdn.com/w${assetWidth}/${code}.png`;
 }
 
 /** Legacy text fallback for places that still render a country as text. */
