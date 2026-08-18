@@ -53,9 +53,14 @@ export async function GET(req: NextRequest) {
     ]);
 
     const seller = sellerSnap.data() || {};
-    const reviews: ReviewData[] = snap.docs
-      .map((d) => ({ id: d.id, ...(d.data() as Record<string, unknown>) }))
-      .sort((a, b) => timestampMillis(b.createdAt) - timestampMillis(a.createdAt));
+    const reviews: ReviewData[] = snap.docs.map((d): ReviewData => ({
+      id: d.id,
+      ...(d.data() as Record<string, unknown>),
+    }));
+
+    reviews.sort((a: ReviewData, b: ReviewData) =>
+      timestampMillis(b.createdAt) - timestampMillis(a.createdAt)
+    );
 
     const count = Number(seller.reviewCount || 0);
     const sum = Number(seller.reviewRatingSum || 0);
