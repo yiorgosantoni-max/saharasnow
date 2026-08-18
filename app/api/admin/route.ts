@@ -167,9 +167,22 @@ export async function PATCH(req: NextRequest) {
     } else if (body.resource === "withdrawal") {
       if (!['paid','reject'].includes(body.action)) throw new Error("INVALID_ACTION");
       changes = {...changes,status:body.action === "paid" ? "paid-manually" : "rejected",adminNote:body.note||"",processedBy:actingAdmin.email,processedAt:FieldValue.serverTimestamp()};
-      await db.runTransaction(async tx=>{const fresh=await tx.get(ref);const value=fresh.data()||{};if(["rejected","paid-manually"].includes(String(value.status)))throw new Error("Withdrawal already processed");tx.set(ref,changes,{merge:true});if(body.action==="reject"&&value.sellerId&&Number(value.grossCents)>0)tx.set(db.collection("users").doc(String(value.sellerId)),{availableBalanceCents:FieldValue.increment(Number(value.grossCents))},{merge:true});});
+      await db.runTransaction(async tx=>{
+        const fresh=await tx.get(ref);
+        const value=fresh.data()||{};
+        if(["rejected","paid-manually"].includes(String(value.status)))throw new Error("Withdrawal already processed");
+        tx.set(ref,changes,{merge:true});
+        if(value.sellerId){
+          const sellerRef=db.collection("users").doc(String(value.sellerId));
+          if(body.action==="reject"&&Number(value.grossCents)>0){
+            tx.set(sellerRef,{availableBalanceCents:FieldValue.increment(Number(value.grossCents)),pendingWithdrawalCents:0},{merge:true});
+          }else if(body.action==="paid"){
+            tx.set(sellerRef,{pendingWithdrawalCents:0,withdrawnCents:FieldValue.increment(Number(value.netCents||0))},{merge:true});
+          }
+        }
+      });
       writtenInTransaction = true;
-      if(current.sellerId) await notifyUser({userId:String(current.sellerId),type:`withdrawal_${body.action}`,eventId:body.id,title:body.action === "paid" ? "Withdrawal paid" : "Withdrawal rejected",message:body.action === "paid" ? `Your withdrawal of €${(Number(current.netCents||0)/100).toFixed(2)} was marked as paid by the administrator.` : `Your withdrawal was rejected${body.note ? `: ${body.note}` : ". The balance has been restored."}`,link:"/?seller=1",email:true});
+      if(current.sellerId) await notifyUser({userId:String(current.sellerId),type:`withdrawal_${body.action}`,eventId:body.id,title:body.action === "paid" ? "Withdrawal paid" : "Withdrawal rejected",message:body.action === "paid" ? `Your withdrawal of $${(Number(current.netCents||0)/100).toFixed(2)} was marked as paid by the administrator.` : `Your withdrawal was rejected${body.note ? `: ${body.note}` : ". The balance has been restored and is available for a new withdrawal request."}`,link:"/?seller=1",email:true});
     } else if (body.resource === "order") {
       if (!['release','refund','delete'].includes(body.action)) throw new Error("INVALID_ACTION");
       if(body.action === "delete") {
@@ -180,7 +193,7 @@ export async function PATCH(req: NextRequest) {
         await db.runTransaction(async tx=>{const fresh=await tx.get(ref);const value=fresh.data()||{};if(["completed-released","refunded"].includes(String(value.status)))throw new Error("Order already resolved");tx.set(ref,changes,{merge:true});if(body.action==="release"&&value.sellerId&&Number(value.sellerNetCents ?? value.serviceCents)>0)tx.set(db.collection("users").doc(String(value.sellerId)),{availableBalanceCents:FieldValue.increment(Number(value.sellerNetCents ?? value.serviceCents))},{merge:true});});
         writtenInTransaction = true;
         if(current.buyerId) await notifyUser({userId:String(current.buyerId),type:`order_${body.action}`,eventId:body.id,title:body.action === "release" ? "Order completed" : "Order refunded",message:body.action === "release" ? `Order #${String(current.orderNumber||body.id)} has been released and completed.` : `Order #${String(current.orderNumber||body.id)} was marked refunded${body.note ? `: ${body.note}` : "."}`,link:`/?order=${body.id}`,email:true});
-        if(current.sellerId) await notifyUser({userId:String(current.sellerId),type:`order_${body.action}`,eventId:body.id,title:body.action === "release" ? "Earnings released" : "Order refunded",message:body.action === "release" ? `Order #${String(current.orderNumber||body.id)} was released. ${((Number(current.sellerNetCents ?? current.serviceCents)||0)/100).toFixed(2)} EUR has been added to your seller earnings.` : `Order #${String(current.orderNumber||body.id)} was refunded, so no seller earnings were released.`,link:"/?seller=1",email:true});
+        if(current.sellerId) await notifyUser({userId:String(current.sellerId),type:`order_${body.action}`,eventId:body.id,title:body.action === "release" ? "Earnings released" : "Order refunded",message:body.action === "release" ? `Order #${String(current.orderNumber||body.id)} was released. ${((Number(current.sellerNetCents ?? current.serviceCents)||0)/100).toFixed(2)} USD has been added to your seller earnings.` : `Order #${String(current.orderNumber||body.id)} was refunded, so no seller earnings were released.`,link:"/?seller=1",email:true});
       }
     } else if (body.resource === "ticket") {
       if (body.action !== "close") throw new Error("INVALID_ACTION");
@@ -194,7 +207,6 @@ export async function PATCH(req: NextRequest) {
       changes = {...changes,accountStatus:suspended ? "suspended" : "active",adminNote:body.note||""};
       await adminAuth.updateUser(body.id, {disabled:suspended});
       if (suspended) {
-        // Prevent any already-issued login code from being used and revoke active sessions.
         await db.collection("loginCodes").doc(String(current.email || "").toLowerCase()).delete();
         await adminAuth.revokeRefreshTokens(body.id);
       }
