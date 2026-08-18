@@ -1,7 +1,6 @@
 "use client";
 
 import {useEffect} from "react";
-import "./marketplace-card-enhancer.css";
 
 type SellerStats={orderCount:number;sellerId?:string};
 type ReviewSummary={count:number;average:number};
@@ -45,7 +44,6 @@ function enhanceCard(article:HTMLElement){
   const id=article.id.replace(/^service-/i,"").trim();
   if(!id)return;
   const sellerLink=article.querySelector<HTMLElement>(".sellerLink");
-  const sellerName=sellerLink?.querySelector("b");
   const cardBody=article.querySelector<HTMLElement>(".cardBody");
   if(!cardBody||!sellerLink)return;
 
