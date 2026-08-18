@@ -24,28 +24,18 @@ export async function GET(req: NextRequest) {
     if (orderId) {
       const user = await userFromRequest(req);
       const orderSnap = await db.collection("orders").doc(orderId).get();
-      if (!orderSnap.exists) {
-        return NextResponse.json({ error: "Order not found" }, { status: 404 });
-      }
+      if (!orderSnap.exists) return NextResponse.json({ error: "Order not found" }, { status: 404 });
       const order = orderSnap.data() || {};
-      if (String(order.buyerId) !== user.uid) {
-        return NextResponse.json({ error: "Not authorized" }, { status: 403 });
-      }
+      if (String(order.buyerId) !== user.uid) return NextResponse.json({ error: "Not authorized" }, { status: 403 });
       const reviewSnap = await db.collection("reviews").doc(orderId).get();
       return NextResponse.json({
-        order: {
-          id: orderId,
-          sellerId: String(order.sellerId || ""),
-          status: String(order.status || ""),
-        },
+        order: { id: orderId, sellerId: String(order.sellerId || ""), status: String(order.status || "") },
         reviewed: reviewSnap.exists,
       });
     }
 
     const sellerId = String(params.get("sellerId") || "");
-    if (!sellerId) {
-      return NextResponse.json({ error: "sellerId is required" }, { status: 400 });
-    }
+    if (!sellerId) return NextResponse.json({ error: "sellerId is required" }, { status: 400 });
 
     const [snap, sellerSnap] = await Promise.all([
       db.collection("reviews").where("sellerId", "==", sellerId).limit(500).get(),
@@ -53,24 +43,28 @@ export async function GET(req: NextRequest) {
     ]);
 
     const seller = sellerSnap.data() || {};
-    const reviews: ReviewData[] = snap.docs.map((d): ReviewData => ({
-      id: d.id,
-      ...(d.data() as Record<string, unknown>),
-    }));
+    const reviews: ReviewData[] = snap.docs.map((d): ReviewData => ({ id: d.id, ...(d.data() as Record<string, unknown>) }));
+    reviews.sort((a: ReviewData, b: ReviewData) => timestampMillis(b.createdAt) - timestampMillis(a.createdAt));
 
-    reviews.sort((a: ReviewData, b: ReviewData) =>
-      timestampMillis(b.createdAt) - timestampMillis(a.createdAt)
-    );
+    let eligibleOrderIds: string[] = [];
+    const authHeader = req.headers.get("authorization");
+    if (authHeader) {
+      try {
+        const user = await userFromRequest(req);
+        const buyerOrders = await db.collection("orders").where("buyerId", "==", user.uid).where("sellerId", "==", sellerId).where("status", "==", "completed-released").limit(100).get();
+        const reviewedIds = new Set(snap.docs.map(d => d.id));
+        eligibleOrderIds = buyerOrders.docs.filter(d => !reviewedIds.has(d.id)).map(d => d.id);
+      } catch {
+        eligibleOrderIds = [];
+      }
+    }
 
     const count = Number(seller.reviewCount || 0);
     const sum = Number(seller.reviewRatingSum || 0);
-
     return NextResponse.json({
       reviews,
-      summary: {
-        count,
-        average: count ? Number((sum / count).toFixed(1)) : 0,
-      },
+      summary: { count, average: count ? Number((sum / count).toFixed(1)) : 0 },
+      eligibleOrderIds,
     });
   } catch (e) {
     const x = publicError(e);
@@ -86,71 +80,43 @@ export async function POST(req: NextRequest) {
     const sellerId = String(b.sellerId || "");
     const rating = Number(b.rating);
     const text = String(b.text || "").trim();
-
-    if (
-      !orderId ||
-      !sellerId ||
-      !Number.isInteger(rating) ||
-      rating < 1 ||
-      rating > 5 ||
-      text.length < 5 ||
-      text.length > 2000
-    ) {
+    if (!orderId || !sellerId || !Number.isInteger(rating) || rating < 1 || rating > 5 || text.length < 5 || text.length > 2000) {
       return NextResponse.json({ error: "Invalid review" }, { status: 400 });
     }
 
     const order = await db.collection("orders").doc(orderId).get();
     const o = order.data() || {};
-    if (
-      !order.exists ||
-      String(o.buyerId) !== user.uid ||
-      String(o.sellerId) !== sellerId ||
-      String(o.status) !== "completed-released"
-    ) {
-      return NextResponse.json(
-        { error: "Only the buyer of a released order can review it" },
-        { status: 403 }
-      );
+    if (!order.exists || String(o.buyerId) !== user.uid || String(o.sellerId) !== sellerId || String(o.status) !== "completed-released") {
+      return NextResponse.json({ error: "Only the buyer of a released order can review it" }, { status: 403 });
     }
 
     const sellerRef = db.collection("users").doc(sellerId);
     const reviewRef = db.collection("reviews").doc(orderId);
     let reviewId = "";
-
     await db.runTransaction(async (tx) => {
       const existing = await tx.get(reviewRef);
-      if (existing.exists) {
-        throw new Error("This order already has a review");
-      }
-
+      if (existing.exists) throw new Error("This order already has a review");
       const sellerSnap = await tx.get(sellerRef);
       const seller = sellerSnap.data() || {};
       const nextCount = Number(seller.reviewCount || 0) + 1;
       const nextSum = Number(seller.reviewRatingSum || 0) + rating;
-
       tx.create(reviewRef, {
         buyerId: user.uid,
         sellerId,
         orderId,
+        listingId: String(o.listingId || ""),
         rating,
         text,
         verifiedPurchase: true,
         createdAt: FieldValue.serverTimestamp(),
       });
-
-      tx.set(
-        sellerRef,
-        {
-          reviewCount: nextCount,
-          reviewRatingSum: nextSum,
-          averageRating: Number((nextSum / nextCount).toFixed(1)),
-        },
-        { merge: true }
-      );
-
+      tx.set(sellerRef, {
+        reviewCount: nextCount,
+        reviewRatingSum: nextSum,
+        averageRating: Number((nextSum / nextCount).toFixed(1)),
+      }, { merge: true });
       reviewId = reviewRef.id;
     });
-
     return NextResponse.json({ ok: true, id: reviewId });
   } catch (e) {
     const x = publicError(e);
