@@ -10,3 +10,11 @@
 [dir="rtl"] .visual .favouriteButton{right:auto;left:5px}
 [dir="rtl"] .shareMenu{right:auto;left:0}
 [dir="rtl"] .visual .shareMenu button{text-align:right}
+
+/* Homepage launch card: animate the actual SaharaSnow bird image. */
+.launchVisual{position:relative;isolation:isolate}
+.launchVisual>img{display:block;transform-origin:50% 62%;will-change:transform,filter;animation:saharasnowBirdFloat 3.8s ease-in-out infinite !important}
+.launchVisual>img:hover{animation:saharasnowBirdHello .9s ease-in-out 1 !important}
+@keyframes saharasnowBirdFloat{0%,100%{transform:translate3d(0,0,0) rotate(-1deg) scale(1)}25%{transform:translate3d(0,-7px,0) rotate(1deg) scale(1.012)}50%{transform:translate3d(0,-12px,0) rotate(-.5deg) scale(1.02)}75%{transform:translate3d(0,-6px,0) rotate(.8deg) scale(1.012)}}
+@keyframes saharasnowBirdHello{0%,100%{transform:translate3d(0,0,0) rotate(0) scale(1)}20%{transform:translate3d(-3px,-10px,0) rotate(-4deg) scale(1.05)}45%{transform:translate3d(3px,-14px,0) rotate(4deg) scale(1.06)}70%{transform:translate3d(-2px,-8px,0) rotate(-2deg) scale(1.035)}}
+@media (prefers-reduced-motion:reduce){.launchVisual>img{animation:none !important}}
