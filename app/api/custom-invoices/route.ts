@@ -10,7 +10,7 @@ export const dynamic="force-dynamic";
 
 const createSchema=z.object({sellerId:z.string().min(1),title:z.string().trim().min(3).max(160),description:z.string().trim().max(2000).default(""),amountCents:z.number().int().min(500).max(100000000)});
 const submittedSchema=z.object({invoiceId:z.string().min(1),txHash:z.string().trim().min(16).max(256)});
-const USDT_TRC20_ADDRESS="TKA1h9L4wWjimF8UVVHQLtFYvWv7TTHdnB";
+const USDT_TRC20_ADDRESS="TKX1h9L4wWjimF8UVWHQLtFYvWv7TTHdnB";
 const orderNumber=(id:string)=>`USDT-${id.replace(/[^a-z0-9]/gi,"").slice(-10).toUpperCase()}`;
 
 export async function POST(req:NextRequest){try{
