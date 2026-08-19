@@ -4,8 +4,6 @@ import { db } from "@/lib/firebase-admin";
 export const runtime="nodejs";
 export const dynamic="force-dynamic";
 
-const countedStatuses=new Set(["paid","in-progress","delivered","completed","completed-released","released"]);
-
 export async function GET(req:NextRequest){
  try{
   const listingId=req.nextUrl.searchParams.get("listingId")?.trim();
@@ -14,8 +12,7 @@ export async function GET(req:NextRequest){
   if(!listingSnap.exists)return NextResponse.json({error:"Listing not found"},{status:404});
   const sellerId=String(listingSnap.data()?.sellerId||"");
   if(!sellerId)return NextResponse.json({sellerId:"",orderCount:0});
-  const orders=await db.collection("orders").where("sellerId","==",sellerId).limit(500).get();
-  const orderCount=orders.docs.reduce((count,doc)=>count+(countedStatuses.has(String(doc.data()?.status||"").trim().toLowerCase())?1:0),0);
-  return NextResponse.json({sellerId,orderCount});
+  const orders=await db.collection("orders").where("sellerId","==",sellerId).where("status","==","completed-released").limit(500).get();
+  return NextResponse.json({sellerId,orderCount:orders.size});
  }catch{return NextResponse.json({sellerId:"",orderCount:0});}
 }
