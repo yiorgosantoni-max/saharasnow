@@ -2,12 +2,12 @@
 
 import { useEffect } from "react";
 
-/** Saharasnow is USD-only. Keep stale preferences and legacy UI pinned to USD. */
+/** Saharasnow is USD-only. Keep stale browser history, dynamic cards and legacy UI pinned to USD. */
 export default function CurrencyNormalizer() {
   useEffect(() => {
     try { localStorage.setItem("saharasnow_currency", "USD"); } catch {}
 
-    const normalizeRoot = (root: Element) => {
+    const normalizeRoot = (root: Element | Document = document) => {
       const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
       const nodes: Text[] = [];
       while (walker.nextNode()) nodes.push(walker.currentNode as Text);
@@ -24,18 +24,28 @@ export default function CurrencyNormalizer() {
     };
 
     const applyUsdOnly = () => {
+      try { localStorage.setItem("saharasnow_currency", "USD"); } catch {}
       document.querySelectorAll<HTMLSelectElement>('select[aria-label="Currency"]').forEach(select => select.remove());
-      const roots = document.querySelectorAll("main, .listingModal, .accountModal, .modal, .growthSuite, footer");
-      roots.forEach(normalizeRoot);
+      normalizeRoot();
+      document.querySelectorAll<HTMLElement>(".saharaPrice").forEach(price => {
+        price.textContent = (price.textContent || "").replace(/€/g, "$").replace(/\bEUR\b/g, "USD");
+      });
     };
 
     applyUsdOnly();
-    const onClick = () => window.setTimeout(applyUsdOnly, 0);
-    window.addEventListener("pageshow", applyUsdOnly);
-    document.addEventListener("click", onClick, true);
+    const observer = new MutationObserver(() => applyUsdOnly());
+    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+    const onRestore = () => window.setTimeout(applyUsdOnly, 0);
+    const onPageShow = () => window.setTimeout(applyUsdOnly, 0);
+    window.addEventListener("pageshow", onPageShow);
+    window.addEventListener("popstate", onRestore);
+    document.addEventListener("visibilitychange", onRestore);
+
     return () => {
-      window.removeEventListener("pageshow", applyUsdOnly);
-      document.removeEventListener("click", onClick, true);
+      observer.disconnect();
+      window.removeEventListener("pageshow", onPageShow);
+      window.removeEventListener("popstate", onRestore);
+      document.removeEventListener("visibilitychange", onRestore);
     };
   }, []);
 
