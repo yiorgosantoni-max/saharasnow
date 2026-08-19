@@ -20,8 +20,15 @@ function youtubeEmbed(src:string){
   return src;
 }
 
+function canEnlargeServiceMedia(){
+  const path=location.pathname;
+  // Never intercept homepage marketplace cards. Enlargement is available only
+  // on the dedicated Services pages and individual service pages.
+  return path==="/services"||path.startsWith("/services/")||path.startsWith("/service/");
+}
+
 function isServiceMedia(target:Element){
-  return Boolean(target.closest("#service-results article[id^='service-'] .visual, article[id^='service-'] .visual, .serviceMedia, .service-media, .listingMedia, .listing-media"));
+  return Boolean(target.closest(".serviceMedia,.service-media,.listingMedia,.listing-media,#service-results article[id^='service-'] .visual,article[id^='service-'] .visual"));
 }
 
 export default function ServiceMediaLightbox(){
@@ -29,6 +36,7 @@ export default function ServiceMediaLightbox(){
 
   useEffect(()=>{
     const onClick=(event:MouseEvent)=>{
+      if(!canEnlargeServiceMedia())return;
       const target=event.target;
       if(!(target instanceof Element)||!isServiceMedia(target))return;
       if(target.closest("button,a,.favouriteButton,.saharaCardShareButton,.cardShare,.shareToggle"))return;
@@ -39,7 +47,10 @@ export default function ServiceMediaLightbox(){
       if(node instanceof HTMLVideoElement&&node.currentSrc){event.preventDefault();setMedia({kind:"video",src:node.currentSrc,title});return;}
       if(node instanceof HTMLIFrameElement&&node.src){event.preventDefault();setMedia({kind:"youtube",src:youtubeEmbed(node.src),title});}
     };
-    const prepare=()=>document.querySelectorAll<HTMLIFrameElement>("#service-results article[id^='service-'] .visual iframe, article[id^='service-'] .visual iframe").forEach(frame=>{frame.style.pointerEvents="none";frame.setAttribute("tabindex","-1");});
+    const prepare=()=>{
+      if(!canEnlargeServiceMedia())return;
+      document.querySelectorAll<HTMLIFrameElement>("#service-results article[id^='service-'] .visual iframe,article[id^='service-'] .visual iframe").forEach(frame=>{frame.style.pointerEvents="none";frame.setAttribute("tabindex","-1");});
+    };
     prepare();
     const observer=new MutationObserver(prepare);
     observer.observe(document.body,{childList:true,subtree:true});
