@@ -13,7 +13,7 @@ function tier(orderCount:number){
 
 export default function MarketplaceSharePopup(){
  useEffect(()=>{
-  let activeId="",activeTitle="";
+  let activeId="",activeTitle="",activeUrl="";
   const style=document.createElement("style");
   style.dataset.marketplaceSharePopup="true";
   style.textContent=`
@@ -35,10 +35,10 @@ export default function MarketplaceSharePopup(){
   const layer=document.createElement("div");
   layer.className="sahara-share-layer";
   layer.setAttribute("aria-hidden","true");
-  layer.innerHTML=`<div class="sahara-share-box" role="dialog" aria-modal="true"><button class="sahara-share-close" type="button" aria-label="Close sharing popup">×</button><div style="font-size:34px;margin-bottom:10px">↗</div><h2>Sharing is caring</h2><p>Inspire people by sharing this service</p><div class="sahara-share-options"><button class="sahara-share-option" data-share="facebook" type="button"><b>f</b><span>Facebook</span></button><button class="sahara-share-option" data-share="linkedin" type="button"><b>in</b><span>LinkedIn</span></button><button class="sahara-share-option" data-share="x" type="button"><b>𝕏</b><span>X</span></button><button class="sahara-share-option" data-share="whatsapp" type="button"><b>◔</b><span>WhatsApp</span></button><button class="sahara-share-option" data-share="copy" type="button"><b>↗</b><span>Copy Link</span></button></div><div class="sahara-share-note"><strong>● Note:</strong> Choose an option to share this service. This window stays open until you press ×.</div></div>`;
+  layer.innerHTML=`<div class="sahara-share-box" role="dialog" aria-modal="true"><button class="sahara-share-close" type="button" aria-label="Close sharing popup">×</button><div style="font-size:34px;margin-bottom:10px">↗</div><h2>Sharing is caring</h2><p>Inspire people by sharing this service</p><div class="sahara-share-options"><button class="sahara-share-option" data-share="facebook" type="button"><b>f</b><span>Facebook</span></button><button class="sahara-share-option" data-share="linkedin" type="button"><b>in</b><span>LinkedIn</span></button><button class="sahara-share-option" data-share="x" type="button"><b>𝕏</b><span>X</span></button><button class="sahara-share-option" data-share="whatsapp" type="button"><b>◔</b><span>WhatsApp</span></button><button class="sahara-share-option" data-share="copy" type="button"><b>↗</b><span>Copy Link</span></button></div><div class="sahara-share-note"><strong>● Note:</strong> A share is counted only when a social network share option is selected. Opening this popup or copying the link does not add a share.</div></div>`;
   document.body.appendChild(layer);
 
-  const close=()=>{layer.classList.remove("open");layer.setAttribute("aria-hidden","true");activeId="";activeTitle="";};
+  const close=()=>{layer.classList.remove("open");layer.setAttribute("aria-hidden","true");activeId="";activeTitle="";activeUrl="";};
   const detailId=()=>{const match=window.location.pathname.match(/^\/service\/[^/]+\/([^/]+)\/?$/);return match?decodeURIComponent(match[1]):"";};
   const update=(id:string,next:Partial<Counts>)=>document.querySelectorAll<HTMLElement>(`[data-share-count-id="${CSS.escape(id)}"]`).forEach(element=>{
    const previous=element.dataset.counts?JSON.parse(element.dataset.counts) as Counts:{shareCount:0,favoriteCount:0};
@@ -51,7 +51,7 @@ export default function MarketplaceSharePopup(){
    const details=document.querySelector<HTMLElement>("main article");if(!details)return;
    if(!document.querySelector("[data-sahara-detail-share-row]")){
     const row=document.createElement("div");row.dataset.saharaDetailShareRow="true";row.className="sahara-detail-share-row";
-    row.innerHTML=`<span class="sahara-card-share-count" data-share-count-id="${id}">0 shares · 0 favourites</span><button type="button" class="sahara-card-share-open" aria-label="Share this service" title="Share this service">⌯</button>`;
+    row.innerHTML=`<span class="sahara-card-share-count" data-share-count-id="${id}">0 shares · 0 favourites</span><button type="button" class="sahara-card-share-open" aria-label="Share this service" title="Share this service">↗</button>`;
     details.appendChild(row);void loadCounts(id);
    }
    if(!document.querySelector("[data-sahara-detail-seller-badge]")){
@@ -67,32 +67,39 @@ export default function MarketplaceSharePopup(){
 
   const openFor=(trigger:Element)=>{
    const article=trigger.closest<HTMLElement>("article[id^='service-'],[data-listing-id]");
-   activeId=article?.getAttribute("data-listing-id")||article?.id.replace(/^service-/i,"")||detailId();
+   activeId=trigger.getAttribute("data-listing-id")||article?.getAttribute("data-listing-id")||article?.id.replace(/^service-/i,"")||detailId();
    activeTitle=article?.querySelector("h1,h2,h3,h4")?.textContent?.trim()||document.querySelector("main h1")?.textContent?.trim()||"Check out this service";
+   const serviceLink=article?.querySelector<HTMLAnchorElement>('a[href*="/service/"]');
+   activeUrl=serviceLink?.href||window.location.href;
    if(activeId){layer.classList.add("open");layer.setAttribute("aria-hidden","false");}
   };
 
-  const record=async(id:string)=>{try{const response=await fetch("/api/listing-engagement",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({listingId:id})});if(response.ok){const data=await response.json() as Partial<Counts>;update(id,{shareCount:Number(data.shareCount||0)})}}catch{}};
+  const record=async(id:string)=>{try{const response=await fetch("/api/listing-engagement",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({listingId:id})});if(response.ok){const data=await response.json() as Partial<Counts>;const shareCount=Math.max(0,Number(data.shareCount)||0);update(id,{shareCount});document.dispatchEvent(new CustomEvent("sahara-share-recorded",{detail:{listingId:id,shareCount}}));}}catch{}};
   const perform=async(kind:ShareKind)=>{
    if(!activeId)return;
-   const url=detailId()===activeId?window.location.href:`${window.location.origin}/service/service/${encodeURIComponent(activeId)}`;
+   const url=activeUrl||window.location.href;
    let target="";
    if(kind==="facebook")target=`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(url)}`;
    if(kind==="linkedin")target=`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}`;
    if(kind==="x")target=`https://twitter.com/intent/tweet?url=${encodeURIComponent(url)}&text=${encodeURIComponent(activeTitle)}`;
    if(kind==="whatsapp")target=`https://wa.me/?text=${encodeURIComponent(`${activeTitle} ${url}`)}`;
-   if(kind==="copy"){try{await navigator.clipboard.writeText(url)}catch{}const label=layer.querySelector<HTMLElement>("[data-share=copy] span");if(label){label.textContent="Copied!";setTimeout(()=>label.textContent="Copy Link",1400)}}else if(target)window.open(target,"_blank","noopener,noreferrer");
-   void record(activeId);
+   if(kind==="copy"){
+     try{await navigator.clipboard.writeText(url)}catch{}
+     const label=layer.querySelector<HTMLElement>("[data-share=copy] span");
+     if(label){label.textContent="Copied!";setTimeout(()=>label.textContent="Copy Link",1400)}
+     return;
+   }
+   if(target){window.open(target,"_blank","noopener,noreferrer");void record(activeId);}
   };
 
   const click=(event:MouseEvent)=>{
    const element=event.target instanceof Element?event.target:null;if(!element)return;
    if(element===layer){close();return;}
    if(element.closest(".sahara-share-close")){event.preventDefault();event.stopPropagation();close();return;}
-   const trigger=element.closest(".cardShare,.shareToggle,[aria-label*='Share' i],[title*='Share' i]");
-   if(trigger&&!layer.contains(trigger)){event.preventDefault();event.stopPropagation();event.stopImmediatePropagation();openFor(trigger);return;}
-   const detailTrigger=element.closest<HTMLButtonElement>(".sahara-card-share-open");
-   if(detailTrigger){event.preventDefault();event.stopPropagation();openFor(detailTrigger);return;}
+   const bottomTrigger=element.closest<HTMLElement>(".saharaCardShareButton,.sahara-card-share-open");
+   if(bottomTrigger&&!layer.contains(bottomTrigger)){event.preventDefault();event.stopPropagation();event.stopImmediatePropagation();openFor(bottomTrigger);return;}
+   const legacyTrigger=element.closest<HTMLElement>(".cardShare,.shareToggle");
+   if(legacyTrigger&&!layer.contains(legacyTrigger)){event.preventDefault();event.stopPropagation();event.stopImmediatePropagation();openFor(legacyTrigger);return;}
    const option=element.closest<HTMLButtonElement>(".sahara-share-option[data-share]");
    if(option&&layer.contains(option)){event.preventDefault();event.stopPropagation();const kind=option.dataset.share as ShareKind|undefined;if(kind)void perform(kind);}
   };
