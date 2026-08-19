@@ -11,15 +11,14 @@ export default function MarketplaceOperationsEmojiLabels(){
         const marker=button.querySelector<HTMLElement>("span");
         if(!marker)return;
         const icon=icons[index];
-        if(icon && marker.textContent!==icon)marker.textContent=icon;
+        if(icon)marker.textContent=icon;
         button.setAttribute("aria-disabled","true");
         button.tabIndex=-1;
       });
     };
     apply();
-    const observer=new MutationObserver(apply);
-    observer.observe(document.body,{childList:true,subtree:true,characterData:true});
-    return()=>observer.disconnect();
+    window.addEventListener("pageshow",apply);
+    return()=>window.removeEventListener("pageshow",apply);
   },[]);
   return null;
 }
