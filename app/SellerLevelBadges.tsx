@@ -55,11 +55,16 @@ export default function SellerLevelBadges(){
    document.querySelectorAll<HTMLElement>("article[id^='service-'],article[data-listing-id]").forEach(a=>void apply(a));
    if(location.pathname.includes("/service/")){
     const id=decodeURIComponent(location.pathname.split("/").filter(Boolean).pop()||"");
-    if(id){const main=document.querySelector<HTMLElement>("main");const seller=main?.querySelector<HTMLElement>(".sellerLink,[data-seller-name]");if(main&&seller&&!main.dataset.saharaDetailLevel){main.dataset.saharaDetailLevel="1";main.setAttribute("data-listing-id",id);void apply(main);}}
+    const main=document.querySelector<HTMLElement>("main");
+    const seller=main?.querySelector<HTMLElement>(".sellerLink,[data-seller-name]");
+    if(main&&seller&&id){main.setAttribute("data-listing-id",id);void apply(main);}
    }
   };
-  scan();const observer=new MutationObserver(scan);observer.observe(document.body,{childList:true,subtree:true});
-  return()=>{observer.disconnect();style.remove();};
+
+  scan();
+  window.addEventListener("pageshow",scan);
+  window.addEventListener("popstate",()=>window.setTimeout(scan,0));
+  return()=>{window.removeEventListener("pageshow",scan);style.remove();};
  },[]);
  return null;
 }
