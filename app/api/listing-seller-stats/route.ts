@@ -4,7 +4,7 @@ import { db } from "@/lib/firebase-admin";
 export const runtime="nodejs";
 export const dynamic="force-dynamic";
 
-const countedStatuses=new Set(["paid","in-progress","delivered","completed-released"]);
+const countedStatuses=new Set(["paid","in-progress","delivered","completed","completed-released","released"]);
 
 export async function GET(req:NextRequest){
  try{
@@ -15,7 +15,7 @@ export async function GET(req:NextRequest){
   const sellerId=String(listingSnap.data()?.sellerId||"");
   if(!sellerId)return NextResponse.json({sellerId:"",orderCount:0});
   const orders=await db.collection("orders").where("sellerId","==",sellerId).limit(500).get();
-  const orderCount=orders.docs.reduce((count,doc)=>count+(countedStatuses.has(String(doc.data()?.status||""))?1:0),0);
+  const orderCount=orders.docs.reduce((count,doc)=>count+(countedStatuses.has(String(doc.data()?.status||"").trim().toLowerCase())?1:0),0);
   return NextResponse.json({sellerId,orderCount});
  }catch{return NextResponse.json({sellerId:"",orderCount:0});}
 }
