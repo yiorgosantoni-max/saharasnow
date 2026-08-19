@@ -12,10 +12,7 @@ function youtubeEmbed(src: string) {
       return id ? `https://www.youtube.com/embed/${id}?autoplay=1` : src;
     }
     if (url.hostname.includes("youtube.com")) {
-      if (url.pathname.startsWith("/embed/")) {
-        const separator = url.search ? "&" : "?";
-        return `${url.origin}${url.pathname}${url.search}${separator}autoplay=1`;
-      }
+      if (url.pathname.startsWith("/embed/")) return `${src}${url.search ? "&" : "?"}autoplay=1`;
       const id = url.searchParams.get("v") || url.pathname.split("/").filter(Boolean).pop() || "";
       return id ? `https://www.youtube.com/embed/${id}?autoplay=1` : src;
     }
@@ -23,17 +20,12 @@ function youtubeEmbed(src: string) {
   return src;
 }
 
-function canEnlargeServiceMedia() {
-  const path = location.pathname;
-  return path === "/services" || path.startsWith("/services/") || path.startsWith("/service/");
+function isServicePage() {
+  return location.pathname === "/service" || location.pathname.startsWith("/service/") || location.pathname === "/services" || location.pathname.startsWith("/services/");
 }
 
-function isServiceMedia(target: Element) {
-  return Boolean(
-    target.closest(
-      ".serviceMedia,.service-media,.listingMedia,.listing-media,#service-results article[id^='service-'] .visual,article[id^='service-'] .visual"
-    )
-  );
+function isIgnoredImage(node: Element) {
+  return Boolean(node.closest("header,nav,footer,button,a[href*='/profile'],.avatar,.sellerAvatar,.userAvatar,.profileAvatar,.logo,.icon"));
 }
 
 export default function ServiceMediaLightbox() {
@@ -41,107 +33,43 @@ export default function ServiceMediaLightbox() {
 
   useEffect(() => {
     const close = () => setMedia(null);
-
     const onClick = (event: MouseEvent) => {
-      if (!canEnlargeServiceMedia()) return;
-
+      if (!isServicePage()) return;
       const target = event.target;
-      if (!(target instanceof Element) || !isServiceMedia(target)) return;
-      if (target.closest("button,a,.favouriteButton,.saharaCardShareButton,.cardShare,.shareToggle")) return;
-
+      if (!(target instanceof Element)) return;
       const node = target.closest("img,video,iframe") || target.querySelector("img,video,iframe");
-      if (!node) return;
-
-      const title = node.getAttribute("alt") || node.getAttribute("title") || "Service media";
-
+      if (!node || isIgnoredImage(node)) return;
       if (node instanceof HTMLImageElement && node.currentSrc) {
-        event.preventDefault();
-        event.stopPropagation();
-        setMedia({ kind: "image", src: node.currentSrc, title });
-        return;
-      }
-
-      if (node instanceof HTMLVideoElement) {
+        event.preventDefault(); event.stopPropagation();
+        setMedia({ kind: "image", src: node.currentSrc, title: node.alt || node.title || "Service image" });
+      } else if (node instanceof HTMLVideoElement) {
         const src = node.currentSrc || node.src;
-        if (!src) return;
-        event.preventDefault();
-        event.stopPropagation();
-        setMedia({ kind: "video", src, title });
-        return;
-      }
-
-      if (node instanceof HTMLIFrameElement && node.src) {
-        event.preventDefault();
-        event.stopPropagation();
-        setMedia({ kind: "youtube", src: youtubeEmbed(node.src), title });
+        if (src) { event.preventDefault(); event.stopPropagation(); setMedia({ kind: "video", src, title: node.title || "Service video" }); }
+      } else if (node instanceof HTMLIFrameElement && node.src) {
+        event.preventDefault(); event.stopPropagation(); setMedia({ kind: "youtube", src: youtubeEmbed(node.src), title: node.title || "Service media" });
       }
     };
-
     const prepare = () => {
-      if (!canEnlargeServiceMedia()) return;
-      document
-        .querySelectorAll<HTMLIFrameElement>(
-          "#service-results article[id^='service-'] .visual iframe,article[id^='service-'] .visual iframe"
-        )
-        .forEach((frame) => {
-          frame.style.pointerEvents = "none";
-          frame.setAttribute("tabindex", "-1");
-        });
+      if (!isServicePage()) return;
+      document.querySelectorAll<HTMLImageElement>("main img").forEach((img) => {
+        if (!isIgnoredImage(img)) { img.style.cursor = "zoom-in"; img.setAttribute("title", "Click to enlarge"); }
+      });
+      document.querySelectorAll<HTMLIFrameElement>("main iframe").forEach((frame) => { frame.style.pointerEvents = "none"; frame.setAttribute("tabindex", "-1"); });
     };
-
     prepare();
     const observer = new MutationObserver(prepare);
     observer.observe(document.body, { childList: true, subtree: true });
-
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") close();
-    };
-
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") close(); };
     document.addEventListener("click", onClick, true);
     document.addEventListener("keydown", onKey);
-
-    return () => {
-      observer.disconnect();
-      document.removeEventListener("click", onClick, true);
-      document.removeEventListener("keydown", onKey);
-    };
+    return () => { observer.disconnect(); document.removeEventListener("click", onClick, true); document.removeEventListener("keydown", onKey); };
   }, []);
 
   if (!media) return null;
-
-  return (
-    <div
-      className="saharaMediaLightbox"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Enlarged service media"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) setMedia(null);
-      }}
-    >
-      <button
-        type="button"
-        className="saharaMediaLightboxClose"
-        aria-label="Close and return to service"
-        title="Close"
-        onClick={() => setMedia(null)}
-      >
-        ×
-      </button>
-      <div className="saharaMediaLightboxContent">
-        {media.kind === "image" ? (
-          <img src={media.src} alt={media.title} />
-        ) : media.kind === "video" ? (
-          <video src={media.src} controls autoPlay playsInline />
-        ) : (
-          <iframe
-            src={media.src}
-            title={media.title}
-            allow="autoplay; encrypted-media; picture-in-picture"
-            allowFullScreen
-          />
-        )}
-      </div>
+  return <div className="saharaMediaLightbox" role="dialog" aria-modal="true" aria-label="Enlarged service media" onMouseDown={(e)=>{if(e.target===e.currentTarget)setMedia(null)}}>
+    <button type="button" className="saharaMediaLightboxClose" aria-label="Close and return to service" title="Close" onClick={()=>setMedia(null)}>×</button>
+    <div className="saharaMediaLightboxContent">
+      {media.kind === "image" ? <img src={media.src} alt={media.title} /> : media.kind === "video" ? <video src={media.src} controls autoPlay playsInline /> : <iframe src={media.src} title={media.title} allow="autoplay; encrypted-media; picture-in-picture" allowFullScreen />}
     </div>
-  );
+  </div>;
 }
