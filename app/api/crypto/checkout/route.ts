@@ -7,8 +7,46 @@ export const runtime="nodejs";
 export const dynamic="force-dynamic";
 const MIN_SERVICE_PRICE_CENTS=500;
 const USDT_TRC20_ADDRESS="TKX1h9L4wWjimF8UVWHQLtFYvWv7TTHdnB";
+const USDC_BEP20_ADDRESS="0x3edce5a73b0a04822108de0e0894eed10987a71a";
 const QR_BASE="https://api.qrserver.com/v1/create-qr-code/?size=320x320&margin=12&data=";
+const PAYMENT_METHODS={
+  "usdt-trc20":{currency:"USDT",network:"Tron (TRC20)",depositAddress:USDT_TRC20_ADDRESS},
+  "usdc-bep20":{currency:"USDC",network:"BNB Smart Chain (BEP20)",depositAddress:USDC_BEP20_ADDRESS},
+} as const;
 
-export async function POST(req:NextRequest){try{const user=await userFromRequest(req);const {listingId,packageIndex=0}=await req.json();const listingSnap=await db.collection("listings").doc(String(listingId)).get();if(!listingSnap.exists||listingSnap.data()?.status!=="active")return NextResponse.json({error:"Listing unavailable"},{status:404});const listing=listingSnap.data()!;if(String(listing.sellerId)===user.uid)return NextResponse.json({error:"You cannot purchase your own service."},{status:400});const pack=listing.packages?.[Number(packageIndex)]??{name:"Service",priceCents:listing.priceCents};const amountCents=Math.max(MIN_SERVICE_PRICE_CENTS,Math.round(Number(pack.priceCents)));if(!Number.isFinite(amountCents))return NextResponse.json({error:"Invalid service price"},{status:400});const orderRef=db.collection("orders").doc();await orderRef.set({buyerId:user.uid,sellerId:listing.sellerId,listingId:String(listingId),packageIndex:Number(packageIndex),packageName:String(pack.name||"Service"),serviceCents:amountCents,buyerFeeCents:0,platformFeeCents:0,checkoutTotalCents:amountCents,totalCents:amountCents,currency:"USD",paymentCurrency:"USDT",network:"TRC20",depositAddress:USDT_TRC20_ADDRESS,paymentMethod:"crypto-usdt-trc20",status:"awaiting-crypto-payment",createdAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp()});return NextResponse.json({orderId:orderRef.id,amountCents,currency:"USDT",network:"TRC20",depositAddress:USDT_TRC20_ADDRESS,qrCodeUrl:`${QR_BASE}${encodeURIComponent(USDT_TRC20_ADDRESS)}`,buyerFeeCents:0,platformFeeCents:0,totalCents:amountCents,feesCents:0});}catch(e){const x=publicError(e);return NextResponse.json({error:x.message},{status:x.status});}}
+type PaymentMethod=keyof typeof PAYMENT_METHODS;
 
-export async function PUT(req:NextRequest){try{const user=await userFromRequest(req);const {orderId,txHash}=await req.json();const id=String(orderId||"");const hash=String(txHash||"").trim();if(!id||hash.length<16)return NextResponse.json({error:"Enter a valid TRC20 transaction hash."},{status:400});const ref=db.collection("orders").doc(id),snap=await ref.get();if(!snap.exists)return NextResponse.json({error:"Order not found."},{status:404});const order=snap.data()||{};if(String(order.buyerId)!==user.uid)return NextResponse.json({error:"Forbidden"},{status:403});if(!["awaiting-crypto-payment","payment-submitted"].includes(String(order.status)))return NextResponse.json({error:"This order cannot accept a payment reference."},{status:400});const duplicate=await db.collection("orders").where("txHashNormalized","==",hash.toLowerCase()).limit(1).get();if(!duplicate.empty&&!duplicate.docs.some(d=>d.id===id))return NextResponse.json({error:"This transaction hash has already been used."},{status:409});await ref.set({status:"payment-submitted",txHash:hash,txHashNormalized:hash.toLowerCase(),cryptoSubmittedAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp()},{merge:true});return NextResponse.json({ok:true,status:"payment-submitted"});}catch(e){const x=publicError(e);return NextResponse.json({error:x.message},{status:x.status});}}
+export async function POST(req:NextRequest){try{
+  const user=await userFromRequest(req);
+  const {listingId,packageIndex=0,paymentMethod="usdt-trc20"}=await req.json();
+  const method=String(paymentMethod) as PaymentMethod;
+  if(!(method in PAYMENT_METHODS))return NextResponse.json({error:"Unsupported payment method"},{status:400});
+  const payment=PAYMENT_METHODS[method];
+  const listingSnap=await db.collection("listings").doc(String(listingId)).get();
+  if(!listingSnap.exists||listingSnap.data()?.status!=="active")return NextResponse.json({error:"Listing unavailable"},{status:404});
+  const listing=listingSnap.data()!;
+  if(String(listing.sellerId)===user.uid)return NextResponse.json({error:"You cannot purchase your own service."},{status:400});
+  const pack=listing.packages?.[Number(packageIndex)]??{name:"Service",priceCents:listing.priceCents};
+  const amountCents=Math.max(MIN_SERVICE_PRICE_CENTS,Math.round(Number(pack.priceCents)));
+  if(!Number.isFinite(amountCents))return NextResponse.json({error:"Invalid service price"},{status:400});
+  const orderRef=db.collection("orders").doc();
+  await orderRef.set({buyerId:user.uid,sellerId:listing.sellerId,listingId:String(listingId),packageIndex:Number(packageIndex),packageName:String(pack.name||"Service"),serviceCents:amountCents,buyerFeeCents:0,platformFeeCents:0,checkoutTotalCents:amountCents,totalCents:amountCents,currency:"USD",paymentCurrency:payment.currency,network:payment.network,depositAddress:payment.depositAddress,paymentMethod:method,status:"awaiting-crypto-payment",createdAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp()});
+  return NextResponse.json({orderId:orderRef.id,amountCents,currency:payment.currency,network:payment.network,depositAddress:payment.depositAddress,qrCodeUrl:`${QR_BASE}${encodeURIComponent(payment.depositAddress)}`,buyerFeeCents:0,platformFeeCents:0,totalCents:amountCents,feesCents:0,paymentMethod:method});
+}catch(e){const x=publicError(e);return NextResponse.json({error:x.message},{status:x.status});}}
+
+export async function PUT(req:NextRequest){try{
+  const user=await userFromRequest(req);
+  const {orderId,txHash}=await req.json();
+  const id=String(orderId||"");
+  const hash=String(txHash||"").trim();
+  if(!id||hash.length<16)return NextResponse.json({error:"Enter a valid blockchain transaction hash."},{status:400});
+  const ref=db.collection("orders").doc(id),snap=await ref.get();
+  if(!snap.exists)return NextResponse.json({error:"Order not found."},{status:404});
+  const order=snap.data()||{};
+  if(String(order.buyerId)!==user.uid)return NextResponse.json({error:"Forbidden"},{status:403});
+  if(!["awaiting-crypto-payment","payment-submitted"].includes(String(order.status)))return NextResponse.json({error:"This order cannot accept a payment reference."},{status:400});
+  const duplicate=await db.collection("orders").where("txHashNormalized","==",hash.toLowerCase()).limit(1).get();
+  if(!duplicate.empty&&!duplicate.docs.some(d=>d.id===id))return NextResponse.json({error:"This transaction hash has already been used."},{status:409});
+  await ref.set({status:"payment-submitted",txHash:hash,txHashNormalized:hash.toLowerCase(),cryptoSubmittedAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp()},{merge:true});
+  return NextResponse.json({ok:true,status:"payment-submitted"});
+}catch(e){const x=publicError(e);return NextResponse.json({error:x.message},{status:x.status});}}
