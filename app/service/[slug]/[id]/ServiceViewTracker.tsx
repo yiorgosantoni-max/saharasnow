@@ -1,0 +1,2 @@
+"use client";import {useEffect} from "react";
+export default function ServiceViewTracker({listingId}:{listingId:string}){useEffect(()=>{if(!listingId)return;const k=`sahara:view:${listingId}`;if(sessionStorage.getItem(k))return;sessionStorage.setItem(k,"1");fetch("/api/listing-view",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({listingId}),keepalive:true}).catch(()=>{});},[listingId]);return null}
