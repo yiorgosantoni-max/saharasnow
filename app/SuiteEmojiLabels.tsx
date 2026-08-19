@@ -15,7 +15,7 @@ export default function SuiteEmojiLabels(){
         if(!span.dataset.suiteId)span.dataset.suiteId=raw;
         const icon=icons[raw];
         if(!icon)return;
-        if(span.textContent!==icon)span.textContent=icon;
+        span.textContent=icon;
         span.style.fontSize="22px";
         span.style.lineHeight="1";
         span.style.letterSpacing="0";
@@ -23,9 +23,8 @@ export default function SuiteEmojiLabels(){
       });
     };
     apply();
-    const observer=new MutationObserver(apply);
-    observer.observe(document.body,{childList:true,subtree:true,characterData:true});
-    return()=>observer.disconnect();
+    window.addEventListener("pageshow",apply);
+    return()=>window.removeEventListener("pageshow",apply);
   },[]);
   return null;
 }
