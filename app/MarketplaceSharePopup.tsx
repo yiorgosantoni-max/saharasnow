@@ -9,8 +9,7 @@ export default function MarketplaceSharePopup(){
  useEffect(()=>{
   let activeId="",activeTitle="";
   const style=document.createElement("style");style.dataset.marketplaceSharePopup="true";style.textContent=`
-   /* Keep the main marketplace card's existing favourite/share controls unchanged. */
-   .visual button[title*="Share" i],.visual button[aria-label*="Share" i],.visual .shareButton,.visual .share-button{display:none!important}
+   /* The main marketplace card already owns its favourite/share controls. */
    [data-sahara-service-actions]{display:none!important}
    .sahara-card-share-row{display:none!important}
    .sahara-detail-share-row{display:flex;align-items:center;gap:8px;margin-top:22px;padding-top:9px;border-top:1px solid rgba(0,0,0,.09);font-size:12px;position:relative;z-index:30}
