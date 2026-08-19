@@ -3,7 +3,7 @@ import {useEffect} from "react";
 
 const wallets=[
   ["Binance","https://cdn.simpleicons.org/binance/F3BA2F"],
-  ["Crypto.com","https://cdn.simpleicons.org/crypto.com/103F68"],
+  ["Crypto.com","https://cdn.simpleicons.org/crypto-dot-com/103F68"],
   ["OKX","https://cdn.simpleicons.org/okx/111111"],
   ["Bybit","https://cdn.simpleicons.org/bybit/F7A600"],
   ["Kraken","https://cdn.simpleicons.org/kraken/5741D9"],
