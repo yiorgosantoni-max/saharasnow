@@ -1,3 +1,51 @@
 "use client";
 import {useEffect} from "react";
-export default function HowItWorksEnhancer(){useEffect(()=>{let timer:number|undefined;const apply=()=>{const heading=[...document.querySelectorAll<HTMLElement>("h1,h2,h3,h4")].find(el=>el.textContent?.trim()==="From idea to done, without the guesswork.");if(!heading)return;const section=heading.parentElement?.parentElement||heading.parentElement;if(!section||section.dataset.saharaHowApplied)return;section.dataset.saharaHowApplied="1";section.classList.add("saharaHowItWorks");const rows=[...section.querySelectorAll<HTMLElement>("div")].filter(el=>/^(Find your match|Order securely|Collaborate|Love the result)$/.test(el.textContent?.trim()||""));const data=[["🔎","Find your match","Search by skill, budget, delivery time, and ⭐ star ratings."],["✨","Order with 0% buyer fees","Pay exactly the service price with no buyer fees added."],["🤝","Collaborate","Message, share attachments, and work together easily with independent talent."],["😍","Love the result","Approve delivery and leave a ⭐ star review and an emoji reaction."]];rows.slice(0,4).forEach((title,i)=>{const row=title.parentElement;if(!row||!data[i])return;row.classList.add("saharaHowStep");row.style.animationDelay=`${i*.12}s`;title.textContent=`${String(i+1).padStart(2,"0")}  ${data[i][0]}  ${data[i][1]}`;const desc=[...row.querySelectorAll<HTMLElement>("p,span")].find(x=>x!==title&&x.textContent?.trim());if(desc)desc.textContent=data[i][2]})};const schedule=()=>{window.clearTimeout(timer);timer=window.setTimeout(apply,120)};schedule();window.addEventListener("pageshow",schedule);return()=>{window.clearTimeout(timer);window.removeEventListener("pageshow",schedule)}},[]);return <style>{`.saharaHowItWorks{position:relative;overflow:hidden;background:linear-gradient(135deg,#f8fafc,#eef2f7,#f7f4f1);padding-block:clamp(26px,5vw,56px)}.saharaHowStep{border-radius:18px;transition:transform .25s ease,box-shadow .25s ease;animation:saharaHowReveal .55s both}.saharaHowStep:hover{transform:translateY(-5px);box-shadow:0 14px 34px rgba(15,23,42,.12)}.saharaHowStep:nth-child(1),.saharaHowStep:nth-child(2){animation:saharaHowReveal .55s both}.saharaHowStep *{overflow-wrap:anywhere}@keyframes saharaHowReveal{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}@media(prefers-reduced-motion:reduce){.saharaHowStep{animation:none!important;transition:none}}@media(max-width:700px){.saharaHowStep:hover{transform:none}}`}</style>}
+
+export default function HowItWorksEnhancer(){
+  useEffect(()=>{
+    let timer:number|undefined;
+    const apply=()=>{
+      const heading=[...document.querySelectorAll<HTMLElement>("h1,h2,h3,h4")]
+        .find(el=>el.textContent?.trim()==="From idea to done, without the guesswork.");
+      if(!heading)return;
+      const section=heading.parentElement?.parentElement||heading.parentElement;
+      if(!section)return;
+      section.classList.add("saharaHowItWorks");
+      const titles=[...section.querySelectorAll<HTMLElement>("h3,h4")]
+        .filter(el=>/^(Find your match|Order securely|Order with 0% buyer fees|Collaborate|Love the result)$/.test(el.textContent?.trim()||""));
+      const data=[
+        ["01","🔎","Find your match","Search by skill, budget, delivery time, and star reviews."],
+        ["02","✨","Order with 0% buyer fees","Pay exactly the service price with no buyer fees added."],
+        ["03","🤝","Collaborate","Message, share attachments, and work together easily."],
+        ["04","😍","Love the result","Approve delivery, leave a star review, and share an emoji reaction."]
+      ];
+      titles.slice(0,4).forEach((title,i)=>{
+        const row=title.parentElement;
+        const item=data[i];
+        if(!row||!item)return;
+        row.classList.add("saharaHowStep");
+        row.style.animationDelay=`${i*.12}s`;
+        const [num,emoji,label,description]=item;
+        title.innerHTML=`<span class="saharaHowNumber">${num}</span><span class="saharaHowEmoji">${emoji}</span><span>${label}</span>`;
+        const desc=[...row.querySelectorAll<HTMLElement>("p,span")].find(x=>x!==title&&x.textContent?.trim()&&!x.classList.contains("saharaHowNumber")&&!x.classList.contains("saharaHowEmoji"));
+        if(desc)desc.textContent=description;
+      });
+    };
+    const schedule=()=>{window.clearTimeout(timer);timer=window.setTimeout(apply,80)};
+    schedule();
+    window.addEventListener("pageshow",schedule);
+    return()=>{window.clearTimeout(timer);window.removeEventListener("pageshow",schedule)};
+  },[]);
+  return <style>{`
+    .saharaHowItWorks{position:relative;overflow:hidden;padding-block:clamp(28px,5vw,60px)}
+    .saharaHowStep{border-radius:18px;overflow:hidden;transition:transform .25s ease,box-shadow .25s ease;animation:saharaHowReveal .55s both}
+    .saharaHowStep:hover{transform:translateY(-5px);box-shadow:0 14px 34px rgba(15,23,42,.12)}
+    .saharaHowStep *{overflow-wrap:anywhere}
+    .saharaHowNumber{display:inline-flex;align-items:center;justify-content:center;min-width:2.1em;margin-right:.45rem;font-weight:800}
+    .saharaHowEmoji{display:inline-block;margin-right:.45rem;animation:saharaHowPop 1.8s ease-in-out infinite}
+    @keyframes saharaHowReveal{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes saharaHowPop{0%,100%{transform:scale(1)}50%{transform:scale(1.12)}}
+    @media(prefers-reduced-motion:reduce){.saharaHowStep,.saharaHowEmoji{animation:none!important;transition:none}}
+    @media(max-width:700px){.saharaHowStep:hover{transform:none}}
+  `}</style>;
+}
