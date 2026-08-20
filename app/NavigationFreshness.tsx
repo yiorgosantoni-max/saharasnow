@@ -3,35 +3,40 @@
 import {useEffect} from "react";
 
 /**
- * Prevent stale browser BFCache / Next client-router snapshots from being
- * shown after Back/Forward navigation. Marketplace data is live, so history
- * restores must always perform a real document reload.
+ * Back/Forward must never revive an old Next.js router or BFCache snapshot.
+ * A history restore is redirected to a unique request URL, which guarantees a
+ * fresh document/RSC request instead of reusing the previous history entry.
  */
 export default function NavigationFreshness(){
  useEffect(()=>{
-  let reloading=false;
-  const reloadCurrentPage=()=>{
-   if(reloading) return;
-   reloading=true;
-   // Do not use sessionStorage/localStorage as a throttle: the same URL can
-   // legitimately be visited repeatedly and must be fresh every time.
-   location.reload();
+  let navigating=false;
+  const freshNavigate=()=>{
+   if(navigating) return;
+   navigating=true;
+   const url=new URL(window.location.href);
+   url.searchParams.set("__nav",`${Date.now()}-${Math.random().toString(36).slice(2)}`);
+   window.location.replace(url.toString());
   };
   const onPageShow=(event:PageTransitionEvent)=>{
-   // `persisted` means the browser restored the page from BFCache.
-   if(event.persisted) reloadCurrentPage();
+   if(event.persisted) freshNavigate();
   };
-  const onPopState=()=>{
-   // Next/browser history can restore an old RSC/client snapshot even when
-   // the page was not BFCache-persisted. Reload after the URL has settled.
-   window.setTimeout(reloadCurrentPage,0);
-  };
+  const onPopState=()=>window.setTimeout(freshNavigate,0);
   window.addEventListener("pageshow",onPageShow);
   window.addEventListener("popstate",onPopState);
   return()=>{
    window.removeEventListener("pageshow",onPageShow);
    window.removeEventListener("popstate",onPopState);
   };
+ },[]);
+ useEffect(()=>{
+  // Keep the visible URL clean after the fresh navigation without creating a
+  // second history entry. The page data has already been loaded from the
+  // unique request URL.
+  const url=new URL(window.location.href);
+  if(url.searchParams.has("__nav")){
+   url.searchParams.delete("__nav");
+   window.history.replaceState(window.history.state,"",url.pathname+url.search+url.hash);
+  }
  },[]);
  return null;
 }
