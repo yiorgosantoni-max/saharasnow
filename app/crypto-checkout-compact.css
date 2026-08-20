@@ -28,11 +28,12 @@
   z-index: 100 !important;
   visibility: visible !important;
   opacity: 1 !important;
-  color: #111827 !important;
-  background: #f3f4f6 !important;
-  border: 1px solid #d1d5db !important;
+  color: #000 !important;
+  background: #fff !important;
+  border: 1px solid #c9c9c9 !important;
   border-radius: 999px !important;
   font-size: 24px !important;
+  font-weight: 800 !important;
   line-height: 1 !important;
   cursor: pointer !important;
 }
@@ -40,8 +41,8 @@
 [aria-label$="payment"] > main {
   width: 100% !important;
   min-height: 0 !important;
-  padding: 22px 56px 22px 22px !important;
-  gap: 16px !important;
+  padding: 20px 56px 20px 20px !important;
+  gap: 13px !important;
 }
 
 [aria-label$="payment"] > main > header {
@@ -49,18 +50,19 @@
   padding-right: 0 !important;
 }
 
+/* Keep the payment title compact. */
 [aria-label$="payment"] > main > header h2 {
-  font-size: clamp(26px, 3vw, 34px) !important;
-  line-height: 1.08 !important;
-  margin-top: 7px !important;
+  font-size: clamp(20px, 2.4vw, 27px) !important;
+  line-height: 1.1 !important;
+  margin: 4px 0 0 !important;
 }
 
-/* Keep the amount readable without letting 5.00 USDT / USDC dominate the page. */
+/* Keep 5.00 USDT / 5.00 USDC clearly readable but small. */
 [aria-label$="payment"] [class*="amount"],
 [aria-label$="payment"] [class*="Amount"],
 [aria-label$="payment"] [data-testid*="amount"],
 [aria-label$="payment"] [data-testid*="Amount"] {
-  font-size: 28px !important;
+  font-size: 20px !important;
   line-height: 1.05 !important;
 }
 
@@ -69,31 +71,46 @@
   line-height: 1.15 !important;
 }
 
+/* Make the visible payment amount text compact even when the amount has no class. */
+[aria-label$="payment"] > main > div > section:nth-child(2) > div:first-child > div:nth-child(2) {
+  font-size: 22px !important;
+  line-height: 1.05 !important;
+}
+
 [aria-label$="payment"] input {
   min-height: 40px !important;
   padding: 9px 10px !important;
 }
 
-/* White address/control areas need visible text and borders. */
+/* White address/control areas: black text for maximum contrast. */
 [aria-label$="payment"] button,
-[aria-label$="payment"] a {
-  color: #111827;
+[aria-label$="payment"] a,
+[aria-label$="payment"] label,
+[aria-label$="payment"] code,
+[aria-label$="payment"] span {
+  color: #000 !important;
 }
 
 [aria-label$="payment"] button[aria-label*="Copy"],
-[aria-label$="payment"] button:has(*) {
-  visibility: visible !important;
-}
-
 [aria-label$="payment"] [class*="copy"],
 [aria-label$="payment"] [class*="Copy"] {
-  color: #111827 !important;
+  color: #000 !important;
+  background: #fff !important;
+  border-color: #c9c9c9 !important;
+  visibility: visible !important;
+  opacity: 1 !important;
 }
 
 [aria-label$="payment"] input,
 [aria-label$="payment"] textarea {
-  color: #111827 !important;
+  color: #000 !important;
   background: #fff !important;
+}
+
+[aria-label$="payment"] input::placeholder,
+[aria-label$="payment"] textarea::placeholder {
+  color: #555 !important;
+  opacity: 1 !important;
 }
 
 @media (max-width:720px) {
@@ -104,40 +121,42 @@
   }
 
   [aria-label$="payment"] > main {
-    padding: 16px 50px 16px 16px !important;
-    gap: 12px !important;
+    padding: 15px 50px 15px 15px !important;
+    gap: 10px !important;
   }
 
   [aria-label$="payment"] > main > header h2 {
-    font-size: 26px !important;
+    font-size: 21px !important;
   }
 
   [aria-label$="payment"] img {
-    width: min(190px, 52vw) !important;
+    width: min(170px, 48vw) !important;
   }
 
   [aria-label$="payment"] [class*="amount"],
   [aria-label$="payment"] [class*="Amount"],
   [aria-label$="payment"] [data-testid*="amount"],
-  [aria-label$="payment"] [data-testid*="Amount"] {
-    font-size: 24px !important;
+  [aria-label$="payment"] [data-testid*="Amount"],
+  [aria-label$="payment"] > main > div > section:nth-child(2) > div:first-child > div:nth-child(2) {
+    font-size: 18px !important;
   }
 
   [aria-label$="payment"] > button[aria-label^="Close payment"],
   [aria-label$="payment"] button[aria-label*="Close"] {
-    top: 8px !important;
-    right: 8px !important;
+    top: 7px !important;
+    right: 7px !important;
     width: 36px !important;
     height: 36px !important;
     min-width: 36px !important;
     min-height: 36px !important;
-    font-size: 21px !important;
+    font-size: 20px !important;
   }
 }
 
 @media (max-width:380px) {
   [aria-label$="payment"] > main { padding: 12px 46px 12px 12px !important; }
-  [aria-label$="payment"] > main > header h2 { font-size: 24px !important; }
+  [aria-label$="payment"] > main > header h2 { font-size: 20px !important; }
   [aria-label$="payment"] [class*="amount"],
-  [aria-label$="payment"] [class*="Amount"] { font-size: 22px !important; }
+  [aria-label$="payment"] [class*="Amount"],
+  [aria-label$="payment"] > main > div > section:nth-child(2) > div:first-child > div:nth-child(2) { font-size: 17px !important; }
 }
