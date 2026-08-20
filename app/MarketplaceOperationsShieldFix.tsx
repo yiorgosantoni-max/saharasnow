@@ -1,0 +1,3 @@
+"use client";
+import {useEffect}from"react";
+export default function MarketplaceOperationsShieldFix(){useEffect(()=>{const fix=()=>{const all=Array.from(document.querySelectorAll<HTMLElement>("section,div"));for(const el of all){const text=(el.innerText||"").trim();if(!text.includes("Marketplace operations")||!text.includes("Everything needed to buy and sell safely."))continue;const children=Array.from(el.children) as HTMLElement[];for(const child of children){if((child.innerText||"").trim()==="🛡️"||((child.textContent||"").trim()==="🛡️"&&child.children.length===0)){child.remove();break}}}};fix();const t=[300,1000,2500].map(x=>setTimeout(fix,x));return()=>t.forEach(clearTimeout)},[]);return null}
