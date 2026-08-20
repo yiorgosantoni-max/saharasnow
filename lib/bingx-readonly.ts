@@ -1,8 +1,11 @@
-import crypto from "node:crypto";
+import { createHmac } from "node:crypto";
 
 const BASE_URL = process.env.BINGX_BASE_URL || "https://open-api.bingx.com";
-const API_KEY = process.env.BINGX_API_KEY;
-const SECRET_KEY = process.env.BINGX_SECRET_KEY;
+
+type BingXCredentialPair = {
+  apiKey: string;
+  secretKey: string;
+};
 
 export type BingXDeposit = {
   amount?: string | number;
@@ -15,8 +18,13 @@ export type BingXDeposit = {
   [key: string]: unknown;
 };
 
-function requireCredentials() {
-  if (!API_KEY || !SECRET_KEY) throw new Error("BingX read-only credentials are not configured.");
+function getCredentials(): BingXCredentialPair {
+  const apiKey = process.env.BINGX_API_KEY?.trim();
+  const secretKey = process.env.BINGX_SECRET_KEY?.trim();
+  if (!apiKey || !secretKey) {
+    throw new Error("BingX read-only credentials are not configured.");
+  }
+  return { apiKey, secretKey };
 }
 
 export async function bingxGetDeposits(
@@ -24,7 +32,7 @@ export async function bingxGetDeposits(
   startTime: number,
   endTime: number,
 ): Promise<BingXDeposit[]> {
-  requireCredentials();
+  const { apiKey, secretKey } = getCredentials();
   const params: Record<string, string> = {
     coin,
     startTime: String(startTime),
@@ -36,32 +44,25 @@ export async function bingxGetDeposits(
   const query = new URLSearchParams(
     Object.entries(params).sort(([a], [b]) => a.localeCompare(b)),
   ).toString();
-  const signature = crypto
-    .createHmac("sha256", SECRET_KEY!)
-    .update(query)
-    .digest("hex");
+  const signature = createHmac("sha256", secretKey).update(query).digest("hex");
   const response = await fetch(
     `${BASE_URL}/openApi/api/v3/capital/deposit/hisrec?${query}&signature=${signature}`,
     {
-      headers: {
-        "X-BX-APIKEY": API_KEY!,
-        "X-SOURCE-KEY": "SAHARASNOW",
-      },
+      method: "GET",
+      headers: { "X-BX-APIKEY": apiKey },
       cache: "no-store",
     },
   );
   if (!response.ok) {
     throw new Error(`BingX deposit API returned HTTP ${response.status}.`);
   }
-  const payload = (await response.json()) as {
-    code?: number;
-    msg?: string;
-    data?: BingXDeposit[];
-  };
-  if (payload.code !== undefined && payload.code !== 0) {
-    throw new Error(payload.msg || "BingX deposit API request failed.");
+  const payload: unknown = await response.json();
+  if (!payload || typeof payload !== "object") return [];
+  const body = payload as { code?: number; msg?: string; data?: unknown };
+  if (body.code !== undefined && body.code !== 0) {
+    throw new Error(body.msg || "BingX deposit API request failed.");
   }
-  return Array.isArray(payload.data) ? payload.data : [];
+  return Array.isArray(body.data) ? (body.data as BingXDeposit[]) : [];
 }
 
 export async function findBingXDepositByHash(
