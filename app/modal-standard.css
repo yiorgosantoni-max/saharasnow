@@ -1,0 +1,12 @@
+/* Shared popup geometry based on the Create a Service modal. */
+:root{--ss-modal-width:min(980px,100%);--ss-modal-max-height:95vh;--ss-modal-padding:30px;--ss-modal-radius:20px;--ss-modal-close-size:38px}
+
+/* Native dialogs used by dashboard and payment flows. */
+dialog{width:var(--ss-modal-width);max-width:calc(100vw - 40px);max-height:var(--ss-modal-max-height);margin:auto;border:0;border-radius:var(--ss-modal-radius);padding:var(--ss-modal-padding);overflow:auto;box-sizing:border-box}
+dialog::backdrop{background:#0d0c2bdb}
+dialog [aria-label*="Close"],dialog button[aria-label*="close"],dialog button[aria-label="×"]{position:absolute;top:18px;right:18px;width:var(--ss-modal-close-size);height:var(--ss-modal-close-size);min-width:var(--ss-modal-close-size);min-height:var(--ss-modal-close-size);z-index:20;border:0;border-radius:50%;background:#f2f2f7;color:#111827;font-size:24px;line-height:1;display:grid;place-items:center;cursor:pointer}
+
+/* Common React popup/dialog containers. This intentionally only targets explicit modal/dialog names. */
+[class*="seller"][class*="modal"],[class*="Seller"][class*="Modal"],[class*="buyer"][class*="modal"],[class*="Buyer"][class*="Modal"],[class*="dashboard"][class*="modal"],[class*="Dashboard"][class*="Modal"],[role="dialog"]{box-sizing:border-box;max-height:var(--ss-modal-max-height);overflow:auto;border-radius:var(--ss-modal-radius)}
+
+@media(max-width:760px){:root{--ss-modal-padding:20px;--ss-modal-radius:20px}dialog{width:calc(100vw - 40px);max-height:95vh}dialog [aria-label*="Close"],dialog button[aria-label*="close"],dialog button[aria-label="×"]{top:18px;right:18px}.listingModal{padding:20px}}
