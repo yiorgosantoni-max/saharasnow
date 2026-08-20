@@ -1,8 +1,16 @@
-import { NextRequest, NextResponse } from "next/server";
-import Stripe from "stripe";
-import { db } from "@/lib/firebase-admin";
-import { publicError, required, userFromRequest } from "@/lib/server";
+import {NextRequest,NextResponse} from "next/server";
+import {db} from "@/lib/firebase-admin";
+import {publicError,userFromRequest} from "@/lib/server";
 
-const BASE_CURRENCY="usd" as const;
-
-export async function POST(req:NextRequest){try{const user=await userFromRequest(req);const {listingId,purpose}=await req.json();const listingRef=db.collection("listings").doc(String(listingId)),listingSnap=await listingRef.get();if(purpose==="listing-credits"){if(!listingSnap.exists)return NextResponse.json({error:"Listing not found"},{status:404});const listing=listingSnap.data()!;if(String(listing.sellerId)!==user.uid)return NextResponse.json({error:"You can only pay for your own listing"},{status:403});if(listing.status!=="awaiting-listing-fee")return NextResponse.json({error:"This listing does not require a credit-pack payment"},{status:400});const stripe=new Stripe(required("STRIPE_SECRET_KEY"));const amount=100;const session=await stripe.checkout.sessions.create({mode:"payment",customer_email:user.email,line_items:[{quantity:1,price_data:{currency:BASE_CURRENCY,unit_amount:amount,product_data:{name:"SaharaSnow listing credit pack",description:"Five additional annual listing credits"}}}],metadata:{type:"listing-credit-pack",listingId:String(listingId),sellerId:user.uid,creditCount:"5",currency:BASE_CURRENCY,baseCurrency:BASE_CURRENCY},success_url:`${required("APP_URL")}/?listing_payment=success&listing=${encodeURIComponent(String(listingId))}`,cancel_url:`${required("APP_URL")}/?listing_payment=cancelled&listing=${encodeURIComponent(String(listingId))}`});await listingRef.set({listingCreditCheckoutSessionId:session.id,currency:BASE_CURRENCY,checkoutCurrency:BASE_CURRENCY},{merge:true});return NextResponse.json({url:session.url,currency:"USD",amountCents:amount});}return NextResponse.json({error:"Service payments use USDT on Tron (TRC20). Stripe is not used for service checkout."},{status:410});}catch(e){const x=publicError(e);return NextResponse.json({error:x.message},{status:x.status});}}
+export async function POST(req:NextRequest){try{
+ const user=await userFromRequest(req);
+ const {listingId,purpose}=await req.json();
+ if(purpose!=="listing-credits")return NextResponse.json({error:"Stripe is not used for marketplace payments."},{status:410});
+ const id=String(listingId||"");
+ const ref=db.collection("listings").doc(id),snap=await ref.get();
+ if(!snap.exists)return NextResponse.json({error:"Listing not found"},{status:404});
+ const listing=snap.data()||{};
+ if(String(listing.sellerId)!==user.uid)return NextResponse.json({error:"You can only pay for your own listing"},{status:403});
+ if(String(listing.status)!=="awaiting-listing-fee")return NextResponse.json({error:"This listing does not require a listing-credit payment"},{status:400});
+ return NextResponse.json({url:`/listing-credits?listing=${encodeURIComponent(id)}`,currency:"USDT/USDC",amount:2,credits:5});
+}catch(e){const x=publicError(e);return NextResponse.json({error:x.message},{status:x.status});}}
