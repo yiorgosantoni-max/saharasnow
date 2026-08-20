@@ -1,0 +1,15 @@
+.designMenu{border:1px solid #dedede;border-top:3px solid #171717;background:#fff;border-radius:10px;margin:0 0 28px;padding:24px 20px 28px;box-shadow:0 16px 45px rgba(0,0,0,.08);color:#171717}
+.designMenuHead{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #e6e6e6;padding:0 0 18px;margin-bottom:24px}
+.designMenuHead span{font-size:11px;text-transform:uppercase;letter-spacing:1.8px;font-weight:800;color:#171717}
+.designMenuHead h3{font-size:24px;margin:5px 0 0;color:#171717;letter-spacing:-.5px}
+.designMenuHead>button{border:0;background:#f2f2f2;color:#171717;border-radius:7px;padding:9px 12px;font-weight:700}
+.designColumns{display:grid;grid-template-columns:repeat(4,1fr);gap:38px}
+.designColumn{min-width:0}
+.designGroup{margin-bottom:25px}
+.designGroup:last-child{margin-bottom:0}
+.designGroup h4{margin:0 0 11px;color:#171717;font-size:15px}
+.designGroup button{display:block;width:100%;border:0;background:transparent;color:#171717;text-align:left;padding:6px 0;line-height:1.35;font-size:14px}
+.designGroup button:hover{font-weight:700;color:#000;transform:translateX(2px)}
+.designGroup small{display:inline-block;color:#ff3e80;border:1px solid #ff3e80;border-radius:8px;font-size:8px;line-height:1;padding:2px 5px;margin-left:6px;vertical-align:middle}
+@media(max-width:980px){.designColumns{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:620px){.designMenu{padding:18px 15px}.designMenuHead h3{font-size:20px}.designColumns{grid-template-columns:1fr;gap:0}.designGroup{margin-bottom:21px}.designGroup button{font-size:13px}}

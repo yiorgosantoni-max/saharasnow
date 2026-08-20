@@ -1,0 +1,38 @@
+env:
+  - variable: NEXT_PUBLIC_FIREBASE_API_KEY
+    value: AIzaSyAwo-rga1JqMD3rMdU-6GvpBfAf92Snrs4
+    availability: [BUILD, RUNTIME]
+  - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+    value: saharasnow-d518f.firebaseapp.com
+    availability: [BUILD, RUNTIME]
+  - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
+    value: saharasnow-d518f
+    availability: [BUILD, RUNTIME]
+  - variable: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+    value: saharasnow-d518f.firebasestorage.app
+    availability: [BUILD, RUNTIME]
+  - variable: FIREBASE_STORAGE_BUCKET
+    value: saharasnow-d518f.firebasestorage.app
+    availability: [RUNTIME]
+  - variable: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+    value: "310959590447"
+    availability: [BUILD, RUNTIME]
+  - variable: NEXT_PUBLIC_FIREBASE_APP_ID
+    value: "1:310959590447:web:16816ff0387fca3b658ada"
+    availability: [BUILD, RUNTIME]
+  - variable: APP_URL
+    value: https://saharasnow.com
+  - variable: EMAIL_FROM
+    value: "SaharaSnow <noreply@saharasnow.com>"
+  - variable: ADMIN_EMAIL
+    value: info@saharasnow.com
+  - variable: SUPER_ADMIN_EMAIL
+    value: yiorgosantoni@gmail.com
+  - variable: STRIPE_SECRET_KEY
+    secret: STRIPE_SECRET_KEY
+  - variable: STRIPE_WEBHOOK_SECRET
+    secret: STRIPE_WEBHOOK_SECRET
+  - variable: RESEND_API_KEY
+    secret: RESEND_API_KEY@1
+  - variable: OTP_HASH_SECRET
+    secret: OTP_HASH_SECRET

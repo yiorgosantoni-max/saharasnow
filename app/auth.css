@@ -1,0 +1,24 @@
+button:disabled{cursor:not-allowed;opacity:.5}
+.brand img{width:44px;height:44px;object-fit:contain;margin-right:3px}
+.brand span{display:inline-block}
+footer .brand img{width:46px;height:46px;background:#fff;border-radius:50%}
+.authModal{width:min(440px,100%);text-align:left}
+.authLogo{width:72px;height:72px;object-fit:contain;display:block;margin:-5px 0 10px}
+.fieldLabel{display:block;font-size:12px;font-weight:800;margin:20px 0 7px}
+.authInput{width:100%;height:51px;border:1px solid #d9d5df;border-radius:8px;padding:0 14px;outline:none;margin-bottom:12px;color:var(--ink)}
+.authInput:focus{border-color:#4b72ed;box-shadow:0 0 0 3px #4b72ed20}
+.codeInput{text-align:center;font-size:24px;letter-spacing:10px;font-weight:800}
+.secureNote{text-align:center;color:var(--muted);font-size:11px;margin:15px 0 0}
+.backLink,.resend{border:0;background:none;color:#4b62ba;font-weight:700;padding:7px 0}
+.resend{display:block;margin:10px auto 0}
+.authModal .eyebrow{margin-bottom:12px}
+@media(max-width:620px){.brand img{width:38px;height:38px}.brand{letter-spacing:-.7px}.authLogo{width:62px;height:62px}}
+.withdrawButton{width:100%;border:1px solid #66618e;background:#29265e;color:#fff;border-radius:8px;padding:13px;margin-top:12px;font-weight:800}
+.withdrawButton:hover{border-color:#ff9287;background:#322e70}
+.shieldIcon{width:58px;height:58px;border-radius:16px;background:#edf3ff;display:grid;place-items:center;font-size:28px;margin-bottom:14px}
+.qrDemo{width:150px;height:150px;margin:18px auto;background:repeating-linear-gradient(45deg,#17154a 0 7px,#fff 7px 13px,#17154a 13px 17px);border:10px solid #fff;outline:1px solid #ddd;display:grid;place-items:center}
+.qrDemo span{background:#fff;color:#17154a;padding:7px;font-size:9px;font-weight:900;text-align:center;letter-spacing:1px}
+.setupList{color:var(--muted);font-size:12px;line-height:1.7;padding-left:20px}
+.withdrawSummary{display:grid;grid-template-columns:1fr auto;gap:10px;background:var(--cream);border-radius:10px;padding:16px;margin:18px 0;font-size:12px}
+.withdrawSummary span{color:var(--muted)}
+.withdrawSummary strong{font-size:18px;color:#23866b}
