@@ -1,0 +1,4 @@
+import { NextRequest, NextResponse } from "next/server";
+import { db } from "@/lib/firebase-admin";
+import { publicError,userFromRequest } from "@/lib/server";
+export async function GET(req:NextRequest){try{const user=await userFromRequest(req);const snaps=await db.collection("conversations").where("participants","array-contains",user.uid).limit(100).get();const ids=[...new Set(snaps.docs.map(s=>{const p=s.data().participants;return Array.isArray(p)?String(p.find((x:string)=>x!==user.uid)||""):""}).filter(Boolean))];const users=await Promise.all(ids.map(async id=>{const d=(await db.collection("users").doc(id).get()).data()||{};return{id,username:String(d.username||d.displayName||[d.firstName,d.lastName].filter(Boolean).join(" ")||"SaharaSnow user")};}));return NextResponse.json({recipients:users});}catch(e){const x=publicError(e);return NextResponse.json({error:x.message},{status:x.status});}}
