@@ -1,0 +1,3 @@
+/* Uniform dashboard tab sizing. Orders & invoices / Notifications are the reference. */
+.saharaRequestsTab,.saharaDeliveryTab{font:inherit!important;font-size:inherit!important;font-weight:inherit!important;line-height:inherit!important;letter-spacing:inherit!important;color:inherit!important;background:transparent!important;border:0!important;padding:inherit!important;margin:inherit!important;min-height:inherit!important;height:inherit!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;white-space:nowrap!important;cursor:pointer!important}
+.saharaRequestsTab:hover,.saharaDeliveryTab:hover{opacity:.8}
