@@ -1,10 +1,9 @@
-/* Force crypto payment copy controls to remain visible on light payment cards. */
-.crypto-payment-modal button,
-.crypto-payment-modal [data-copy-address],
+/* Crypto payment popup copy controls. Imported by the payment UI. */
 .crypto-payment-modal .copy-deposit-address,
 .crypto-payment-modal .address-copied,
-.crypto-payment-modal [data-copy-status]{color:#000 !important;background-color:#fff !important;opacity:1 !important;visibility:visible !important;text-shadow:none !important;}
+.crypto-payment-modal [data-copy-address],
+.crypto-payment-modal [data-copy-status]{color:#000!important;background:#fff!important;opacity:1!important;visibility:visible!important;display:inline-flex!important;text-shadow:none!important}
 .crypto-payment-modal .copy-deposit-address *,
 .crypto-payment-modal .address-copied *,
 .crypto-payment-modal [data-copy-address] *,
-.crypto-payment-modal [data-copy-status] *{color:#000 !important;fill:#000 !important;stroke:#000 !important;opacity:1 !important;}
+.crypto-payment-modal [data-copy-status]{color:#000!important;fill:#000!important;stroke:#000!important;opacity:1!important}
