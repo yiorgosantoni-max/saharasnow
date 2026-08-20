@@ -65,3 +65,19 @@
 .listingHeading h2{font-size:27px}
 .mediaPreview img{width:110px;height:80px}
 }
+
+/* How it works: compact, unnumbered, star-rating-only wording */
+.steps .step>span{display:none!important}
+.steps .step h3{font-size:0!important}
+.steps .step h3::after{display:block;font-size:inherit;font-size:17px;line-height:1.35;content:""}
+.steps .step:nth-child(1) h3::after{content:"Find your match"}
+.steps .step:nth-child(2) h3::after{content:"Pay exactly the service price with no buyer fees added."}
+.steps .step:nth-child(3) h3::after{content:"Collaborate easily"}
+.steps .step:nth-child(4) h3::after{content:"Love the result"}
+.steps .step p{font-size:0!important}
+.steps .step:nth-child(1) p::after{content:"Search by skill, budget, delivery time, and star ratings."}
+.steps .step:nth-child(2) p::after{content:"Enjoy 0% buyer fees with no extra checkout charges added."}
+.steps .step:nth-child(3) p::after{content:"Message, share attachments, and work together throughout your order."}
+.steps .step:nth-child(4) p::after{content:"Approve delivery and leave a star rating for your experience."}
+.steps .step p::after{display:block;font-size:13px;line-height:1.5;color:var(--muted)}
+.steps .step h3::before{content:none!important}
