@@ -1,136 +1,132 @@
-/* Compact USDT / USDC checkout: compact, readable, and mobile-safe. */
+/* Shared compact modal system: matches the Create a Service listing box on desktop and mobile. */
 
-[aria-label$="payment"] {
-  position: relative !important;
-  width: min(920px, calc(100vw - 24px)) !important;
-  height: auto !important;
-  max-height: calc(100dvh - 24px) !important;
-  margin: auto !important;
-  border-radius: 24px !important;
-  box-shadow: 0 24px 70px rgba(16,24,40,.28) !important;
-  overflow-x: hidden !important;
-  overflow-y: auto !important;
+:root {
+  --service-modal-width: 980px;
+  --service-modal-radius: 20px;
+  --service-modal-padding: 30px;
 }
 
-[aria-label$="payment"] > button[aria-label^="Close payment"],
-[aria-label$="payment"] button[aria-label*="Close"] {
-  position: absolute !important;
-  top: 10px !important;
-  right: 10px !important;
-  width: 40px !important;
-  height: 40px !important;
-  min-width: 40px !important;
-  min-height: 40px !important;
-  display: grid !important;
-  place-items: center !important;
-  padding: 0 !important;
-  margin: 0 !important;
-  z-index: 100 !important;
-  visibility: visible !important;
-  opacity: 1 !important;
-  color: #000 !important;
-  background: #fff !important;
-  border: 1px solid #c9c9c9 !important;
-  border-radius: 999px !important;
-  font-size: 24px !important;
-  font-weight: 800 !important;
-  line-height: 1 !important;
-  cursor: pointer !important;
+/* USDT / USDC payment pages use the exact Create a Service outer dimensions. */
+[aria-label$="payment"] {
+  position: relative !important;
+  width: min(var(--service-modal-width), calc(100vw - 40px)) !important;
+  max-height: 95vh !important;
+  height: auto !important;
+  margin: auto !important;
+  border-radius: var(--service-modal-radius) !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  box-shadow: 0 24px 70px rgba(16,24,40,.28) !important;
 }
 
 [aria-label$="payment"] > main {
   width: 100% !important;
   min-height: 0 !important;
-  padding: 20px 56px 20px 20px !important;
-  gap: 13px !important;
+  padding: var(--service-modal-padding) 56px var(--service-modal-padding) var(--service-modal-padding) !important;
+  gap: 16px !important;
 }
 
-[aria-label$="payment"] > main > header {
-  max-width: none !important;
-  padding-right: 0 !important;
-}
-
-/* Keep the payment title compact. */
 [aria-label$="payment"] > main > header h2 {
-  font-size: clamp(20px, 2.4vw, 27px) !important;
+  font-size: 27px !important;
   line-height: 1.1 !important;
-  margin: 4px 0 0 !important;
+  margin: 6px 0 0 !important;
 }
 
-/* Keep 5.00 USDT / 5.00 USDC clearly readable but small. */
+/* Payment amount stays compact like the service modal typography. */
 [aria-label$="payment"] [class*="amount"],
 [aria-label$="payment"] [class*="Amount"],
 [aria-label$="payment"] [data-testid*="amount"],
-[aria-label$="payment"] [data-testid*="Amount"] {
+[aria-label$="payment"] [data-testid*="Amount"],
+[aria-label$="payment"] > main > div > section:nth-child(2) > div:first-child > div:nth-child(2) {
   font-size: 20px !important;
   line-height: 1.05 !important;
 }
 
-[aria-label$="payment"] strong,
-[aria-label$="payment"] b {
-  line-height: 1.15 !important;
+/* Always-visible X, matching the Create a Service close control footprint. */
+[aria-label$="payment"] > button[aria-label^="Close payment"],
+[aria-label$="payment"] button[aria-label*="Close"] {
+  position: absolute !important;
+  top: 18px !important;
+  right: 18px !important;
+  width: 38px !important;
+  height: 38px !important;
+  min-width: 38px !important;
+  min-height: 38px !important;
+  display: grid !important;
+  place-items: center !important;
+  z-index: 1000 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  color: #111 !important;
+  background: #f2f2f7 !important;
+  border: 0 !important;
+  border-radius: 50% !important;
+  font-size: 24px !important;
+  line-height: 1 !important;
+  cursor: pointer !important;
 }
 
-/* Make the visible payment amount text compact even when the amount has no class. */
-[aria-label$="payment"] > main > div > section:nth-child(2) > div:first-child > div:nth-child(2) {
-  font-size: 22px !important;
-  line-height: 1.05 !important;
-}
-
-[aria-label$="payment"] input {
-  min-height: 40px !important;
-  padding: 9px 10px !important;
-}
-
-/* White address/control areas: black text for maximum contrast. */
-[aria-label$="payment"] button,
-[aria-label$="payment"] a,
-[aria-label$="payment"] label,
-[aria-label$="payment"] code,
-[aria-label$="payment"] span {
+/* Deposit address + copied address: black on white. */
+[aria-label$="payment"] button[aria-label*="Copy"],
+[aria-label$="payment"] [class*="copy"],
+[aria-label$="payment"] [class*="Copy"],
+[aria-label$="payment"] input,
+[aria-label$="payment"] textarea,
+[aria-label$="payment"] code {
   color: #000 !important;
 }
 
 [aria-label$="payment"] button[aria-label*="Copy"],
 [aria-label$="payment"] [class*="copy"],
 [aria-label$="payment"] [class*="Copy"] {
-  color: #000 !important;
   background: #fff !important;
   border-color: #c9c9c9 !important;
+  opacity: 1 !important;
   visibility: visible !important;
-  opacity: 1 !important;
 }
 
-[aria-label$="payment"] input,
-[aria-label$="payment"] textarea {
-  color: #000 !important;
-  background: #fff !important;
+/* Shared dashboard panels/cards: use the same outer footprint as Create a Service. */
+.sellerDashboardModal,
+.buyerDashboardModal,
+.seller-dashboard-modal,
+.buyer-dashboard-modal,
+.dashboardModal,
+.dashboard-modal,
+.dashboardPanel,
+.dashboard-panel,
+.dashboardCard,
+.dashboard-card,
+.accountModal,
+.account-modal {
+  width: min(var(--service-modal-width), calc(100vw - 40px)) !important;
+  max-height: 95vh !important;
+  height: auto !important;
+  border-radius: var(--service-modal-radius) !important;
+  box-sizing: border-box !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
 }
 
-[aria-label$="payment"] input::placeholder,
-[aria-label$="payment"] textarea::placeholder {
-  color: #555 !important;
-  opacity: 1 !important;
-}
-
-@media (max-width:720px) {
+@media (max-width:760px) {
   [aria-label$="payment"] {
-    width: calc(100vw - 12px) !important;
-    max-height: calc(100dvh - 12px) !important;
-    border-radius: 18px !important;
+    width: calc(100vw - 40px) !important;
+    max-height: 95vh !important;
+    border-radius: var(--service-modal-radius) !important;
   }
 
   [aria-label$="payment"] > main {
-    padding: 15px 50px 15px 15px !important;
-    gap: 10px !important;
+    padding: 20px 50px 20px 20px !important;
+    gap: 12px !important;
   }
 
   [aria-label$="payment"] > main > header h2 {
-    font-size: 21px !important;
+    font-size: 27px !important;
   }
 
   [aria-label$="payment"] img {
-    width: min(170px, 48vw) !important;
+    width: min(190px, 52vw) !important;
   }
 
   [aria-label$="payment"] [class*="amount"],
@@ -138,25 +134,33 @@
   [aria-label$="payment"] [data-testid*="amount"],
   [aria-label$="payment"] [data-testid*="Amount"],
   [aria-label$="payment"] > main > div > section:nth-child(2) > div:first-child > div:nth-child(2) {
-    font-size: 18px !important;
+    font-size: 20px !important;
   }
 
   [aria-label$="payment"] > button[aria-label^="Close payment"],
   [aria-label$="payment"] button[aria-label*="Close"] {
-    top: 7px !important;
-    right: 7px !important;
-    width: 36px !important;
-    height: 36px !important;
-    min-width: 36px !important;
-    min-height: 36px !important;
-    font-size: 20px !important;
+    top: 18px !important;
+    right: 18px !important;
+    width: 38px !important;
+    height: 38px !important;
+    min-width: 38px !important;
+    min-height: 38px !important;
   }
-}
 
-@media (max-width:380px) {
-  [aria-label$="payment"] > main { padding: 12px 46px 12px 12px !important; }
-  [aria-label$="payment"] > main > header h2 { font-size: 20px !important; }
-  [aria-label$="payment"] [class*="amount"],
-  [aria-label$="payment"] [class*="Amount"],
-  [aria-label$="payment"] > main > div > section:nth-child(2) > div:first-child > div:nth-child(2) { font-size: 17px !important; }
+  .sellerDashboardModal,
+  .buyerDashboardModal,
+  .seller-dashboard-modal,
+  .buyer-dashboard-modal,
+  .dashboardModal,
+  .dashboard-modal,
+  .dashboardPanel,
+  .dashboard-panel,
+  .dashboardCard,
+  .dashboard-card,
+  .accountModal,
+  .account-modal {
+    width: calc(100vw - 40px) !important;
+    max-height: 95vh !important;
+    border-radius: var(--service-modal-radius) !important;
+  }
 }
