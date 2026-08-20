@@ -1,0 +1,135 @@
+/* Compact USDT / USDC checkout: matches the dense Create a Service layout and stays usable on mobile. */
+
+[aria-label$="payment"] {
+  width: min(920px, calc(100vw - 24px)) !important;
+  height: auto !important;
+  max-height: calc(100dvh - 24px) !important;
+  margin: auto !important;
+  border-radius: 24px !important;
+  box-shadow: 0 24px 70px rgba(16, 24, 40, .28) !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+}
+
+[aria-label$="payment"] > button[aria-label^="Close payment"] {
+  position: absolute !important;
+  top: 12px !important;
+  right: 12px !important;
+  width: 38px !important;
+  height: 38px !important;
+  font-size: 24px !important;
+  z-index: 5 !important;
+}
+
+[aria-label$="payment"] > main {
+  width: 100% !important;
+  min-height: 0 !important;
+  padding: 22px !important;
+  gap: 16px !important;
+}
+
+[aria-label$="payment"] > main > header {
+  max-width: none !important;
+  padding-right: 46px !important;
+}
+
+[aria-label$="payment"] > main > header h2 {
+  font-size: clamp(30px, 4vw, 46px) !important;
+  margin-top: 7px !important;
+}
+
+[aria-label$="payment"] > main > div {
+  grid-template-columns: minmax(0, .82fr) minmax(0, 1.18fr) !important;
+  gap: 16px !important;
+}
+
+[aria-label$="payment"] section {
+  border-radius: 16px !important;
+}
+
+[aria-label$="payment"] img {
+  width: min(220px, 46vw) !important;
+  padding: 8px !important;
+  margin: 8px auto 10px !important;
+  border-radius: 14px !important;
+}
+
+[aria-label$="payment"] input {
+  min-height: 40px !important;
+  padding: 9px 10px !important;
+}
+
+@media (max-width: 720px) {
+  [aria-label$="payment"] {
+    width: calc(100vw - 12px) !important;
+    max-height: calc(100dvh - 12px) !important;
+    border-radius: 18px !important;
+  }
+
+  [aria-label$="payment"] > main {
+    padding: 16px !important;
+    gap: 12px !important;
+  }
+
+  [aria-label$="payment"] > main > header {
+    padding-right: 42px !important;
+  }
+
+  [aria-label$="payment"] > main > header h2 {
+    font-size: 30px !important;
+    line-height: 1.05 !important;
+  }
+
+  [aria-label$="payment"] > main > header p {
+    font-size: 13px !important;
+  }
+
+  [aria-label$="payment"] > main > div {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+
+  [aria-label$="payment"] img {
+    width: min(190px, 52vw) !important;
+  }
+
+  [aria-label$="payment"] > main > div > section:first-child {
+    padding: 12px !important;
+  }
+
+  [aria-label$="payment"] > main > div > section:nth-child(2) > div:first-child {
+    padding: 13px 15px !important;
+  }
+
+  [aria-label$="payment"] > main > div > section:nth-child(2) > div:first-child > div:nth-child(2) {
+    font-size: 36px !important;
+  }
+
+  [aria-label$="payment"] label {
+    font-size: 11px !important;
+    gap: 4px !important;
+  }
+
+  [aria-label$="payment"] > main > section:last-child {
+    padding-top: 12px !important;
+    gap: 8px !important;
+  }
+
+  [aria-label$="payment"] > main > section:last-child button {
+    padding: 11px 13px !important;
+  }
+}
+
+@media (max-width: 380px) {
+  [aria-label$="payment"] > main {
+    padding: 12px !important;
+  }
+
+  [aria-label$="payment"] > main > header h2 {
+    font-size: 27px !important;
+  }
+
+  [aria-label$="payment"] img {
+    width: 160px !important;
+  }
+}
