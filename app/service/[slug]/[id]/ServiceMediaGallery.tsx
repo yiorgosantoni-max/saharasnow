@@ -5,6 +5,8 @@ import styles from "./service.module.css";
 
 type Props={title:string;photoUrls:string[];videoUrl?:string};
 type Media={kind:"image"|"youtube"|"video";src:string};
+const EMPTY_GRADIENTS=["linear-gradient(135deg,#e5f0ff,#90b9ff)","linear-gradient(135deg,#fff0e8,#ffb79c)","linear-gradient(135deg,#eee8ff,#b5a0ff)","linear-gradient(135deg,#e5fff4,#8ee0bd)"];
+const emptyGradientFor=(value:string)=>{let hash=0;for(let i=0;i<value.length;i++)hash=(hash*31+value.charCodeAt(i))>>>0;return EMPTY_GRADIENTS[hash%EMPTY_GRADIENTS.length]};
 
 function youtubeEmbedUrl(value:string){
  const raw=value.trim();if(!raw)return "";
@@ -13,6 +15,6 @@ function youtubeEmbedUrl(value:string){
 
 export default function ServiceMediaGallery({title,photoUrls,videoUrl=""}:Props){
  const media=useMemo<Media[]>(()=>{const items:Media[]=photoUrls.filter(Boolean).map(src=>({kind:"image",src}));const youtube=youtubeEmbedUrl(videoUrl);if(youtube)items.push({kind:"youtube",src:youtube});else if(videoUrl.trim())items.push({kind:"video",src:videoUrl.trim()});return items},[photoUrls,videoUrl]);
- const[index,setIndex]=useState(0);if(!media.length)return <div className={styles.serviceMediaEmpty}/>;const current=media[Math.min(index,media.length-1)],move=(direction:number)=>setIndex(value=>(value+direction+media.length)%media.length);
+ const[index,setIndex]=useState(0);if(!media.length)return <div className={styles.serviceMediaEmpty} style={{background:emptyGradientFor(title)}}><b className={styles.serviceMediaEmptyStar}>✦</b></div>;const current=media[Math.min(index,media.length-1)],move=(direction:number)=>setIndex(value=>(value+direction+media.length)%media.length);
  return <div className={styles.serviceMediaGallery}><div className={styles.serviceMediaStage}>{current.kind==="image"?<img src={current.src} alt={`${title} image ${index+1}`} className={styles.serviceMediaImage}/>:current.kind==="youtube"?<iframe src={current.src} title={`${title} video`} className={styles.serviceMediaVideo} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowFullScreen/>:<video controls preload="metadata" className={styles.serviceMediaVideo} src={current.src}>Your browser does not support this video.</video>}{media.length>1&&<><button type="button" className={`${styles.serviceMediaArrow} ${styles.serviceMediaPrev}`} onClick={()=>move(-1)} aria-label="Previous media">←</button><button type="button" className={`${styles.serviceMediaArrow} ${styles.serviceMediaNext}`} onClick={()=>move(1)} aria-label="Next media">→</button></>}</div>{media.length>1&&<div className={styles.serviceMediaDots} aria-label="Service media">{media.map((item,itemIndex)=><button type="button" key={`${item.kind}-${item.src}`} className={itemIndex===index?styles.active:""} onClick={()=>setIndex(itemIndex)} aria-label={`Show media ${itemIndex+1}`}>{item.kind==="image"?`Image ${itemIndex+1}`:"Video"}</button>)}</div>}</div>
 }
