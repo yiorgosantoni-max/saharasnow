@@ -78,18 +78,23 @@ async function approvePayment(id:string,adminUid:string,bypass:boolean):Promise<
 
 export async function POST(req:NextRequest){try{
   const user=await userFromRequest(req),body=submitSchema.parse(await req.json()),hash=body.transactionHash.toLowerCase(),ref=db.collection("cryptoPayments").doc();
+  let amount=body.amount;
   if(body.orderId){
-    const o=await users(body.orderId);
-    if(!o)throw Error("Order not found.");
-    if(o.buyerId!==user.uid)throw Error("Only the buyer can submit payment for this order.");
+    const orderSnap=await db.collection("orders").doc(body.orderId).get();
+    if(!orderSnap.exists)throw Error("Order not found.");
+    const o=orderSnap.data()||{};
+    if(String(o.buyerId)!==user.uid)throw Error("Only the buyer can submit payment for this order.");
+    const requiredAmount=Number(o.checkoutTotalCents||o.totalCents||0)/100;
+    if(!Number.isFinite(requiredAmount)||requiredAmount<=0)throw Error("Invalid order payment amount.");
+    amount=requiredAmount;
   }
   await db.runTransaction(async tx=>{
     const d=await tx.get(db.collection("cryptoPayments").where("transactionHash","==",hash).limit(1));
     if(!d.empty)throw Error("This transaction hash has already been submitted.");
-    tx.set(ref,{userId:user.uid,userEmail:user.email||"",transactionHash:hash,currency:body.currency,amount:body.amount,purpose:body.orderId?"order":body.purpose||"deposit",orderId:body.orderId||null,status:"pending",bingxMatchStatus:"pending-verification",submittedAt:FieldValue.serverTimestamp()});
+    tx.set(ref,{userId:user.uid,userEmail:user.email||"",transactionHash:hash,currency:body.currency,amount,purpose:body.orderId?"order":body.purpose||"deposit",orderId:body.orderId||null,status:"pending",bingxMatchStatus:"pending-verification",submittedAt:FieldValue.serverTimestamp()});
   });
-  if(body.orderId)await notifyOrder(body.orderId,"submitted",body.currency,body.amount);
-  else await notifyUser({userId:user.uid,type:"crypto_deposit_submitted",eventId:ref.id,title:"Crypto payment submitted",message:`Your ${body.amount} ${body.currency} deposit is awaiting administrator approval.`,link:"/?seller=1",email:true});
+  if(body.orderId)await notifyOrder(body.orderId,"submitted",body.currency,amount);
+  else await notifyUser({userId:user.uid,type:"crypto_deposit_submitted",eventId:ref.id,title:"Crypto payment submitted",message:`Your ${amount} ${body.currency} deposit is awaiting administrator approval.`,link:"/?seller=1",email:true});
   return NextResponse.json({ok:true,id:ref.id,status:"pending"});
 }catch(e){const x=e instanceof z.ZodError?{message:"Invalid payment submission.",status:400}:publicError(e);return NextResponse.json({error:x.message},{status:x.status});}}
 
