@@ -43,7 +43,7 @@ export async function POST(req:NextRequest){
     const order=snap.data()||{};
     if(String(order.buyerId)!==user.uid)return NextResponse.json({error:"Only the buyer can open a dispute."},{status:403});
     const deadline=order.disputeDeadline&&typeof order.disputeDeadline.toDate==="function"?order.disputeDeadline.toDate():order.disputeDeadline instanceof Date?order.disputeDeadline:new Date(0);
-    if(Date.now()>deadline.getTime())return NextResponse.json({error:"The five-day dispute window has expired."},{status:400});
+    if(Date.now()>deadline.getTime())return NextResponse.json({error:"The dispute window for this order has closed."},{status:400});
     if(["disputed","refunded","completed-released"].includes(String(order.status)))return NextResponse.json({error:"This order is already resolved or has an active dispute."},{status:400});
     await ref.set({status:"disputed",disputeStatus:"open",disputeReason:body.reason,disputeOpenedBy:user.uid,disputeOpenedAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp()},{merge:true});
     await notifyUser({userId:String(order.sellerId),type:"dispute_opened",eventId:body.orderId,title:`Dispute opened for order #${String(order.orderNumber||body.orderId)}`,message:`The buyer opened a dispute. The order is now held for administrator review.`,link:`/?order=${body.orderId}`,email:true});
