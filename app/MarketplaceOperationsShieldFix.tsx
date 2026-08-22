@@ -1,3 +1,0 @@
-"use client";
-import{useEffect}from"react";
-export default function MarketplaceOperationsShieldFix(){useEffect(()=>{const fix=()=>{for(const el of Array.from(document.querySelectorAll<HTMLElement>("section,div"))){const text=(el.innerText||"").trim();if(!text.includes("Marketplace operations")||!text.includes("Everything needed to buy and sell safely."))continue;for(const child of Array.from(el.children)as HTMLElement[]){if(((child.innerText||"").trim()==="🛡️"||(child.textContent||"").trim()==="🛡️")&&child.children.length===0)child.remove()}}};fix();const o=new MutationObserver(fix);o.observe(document.body,{childList:true,subtree:true});const ts=[300,1000,2500].map(x=>setTimeout(fix,x));return()=>{o.disconnect();ts.forEach(clearTimeout)}},[]);return null}
