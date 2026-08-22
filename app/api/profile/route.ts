@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
     const pending = orders.docs.filter(d => ["paid","in-progress","delivered"].includes(String(d.data().status)));
     const totalEarningsCents = released.reduce((sum,d)=>sum + Number(d.data().sellerNetCents ?? d.data().serviceCents ?? 0),0);
     const pendingEarningsCents = pending.reduce((sum,d)=>sum + Number(d.data().sellerNetCents ?? d.data().serviceCents ?? 0),0);
-    return NextResponse.json({profile:{...data,joinedAt:jsonDate(data.joinedAt),updatedAt:jsonDate(data.updatedAt),availableBalanceCents:Number(data.availableBalanceCents||0),totalEarningsCents,pendingEarningsCents,releasedOrderCount:released.length,activeOrderCount:pending.length,activeListingCount:listings.docs.filter(d=>d.data().status==="active").length}});
+    return NextResponse.json({profile:{...data,joinedAt:jsonDate(data.joinedAt),updatedAt:jsonDate(data.updatedAt),availableBalanceCents:Number(data.availableBalanceCents||0),usdtBalanceCents:Number(data.usdtBalanceCents||0),usdcBalanceCents:Number(data.usdcBalanceCents||0),totalEarningsCents,pendingEarningsCents,releasedOrderCount:released.length,activeOrderCount:pending.length,activeListingCount:listings.docs.filter(d=>d.data().status==="active").length}});
   } catch (error) {
     const result = publicError(error);
     return NextResponse.json({error:result.message},{status:result.status});
