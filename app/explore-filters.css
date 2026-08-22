@@ -1,4 +1,4 @@
-.exploreFilters{display:grid;grid-template-columns:minmax(220px,1.5fr) repeat(3,minmax(150px,1fr));gap:10px;margin-top:28px}
+.exploreFilters{display:grid;grid-template-columns:minmax(220px,1.5fr) repeat(4,minmax(140px,1fr));gap:10px;margin-top:28px}
 .exploreSearch{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-radius:12px;background:#fff;padding:0 14px;height:46px}
 .exploreSearch span{font-size:18px;color:#9a9dae}
 .exploreSearch input{flex:1;min-width:0;border:0;outline:0;background:transparent;font-size:14px;color:var(--ink);height:100%}
@@ -11,14 +11,15 @@
 .countryPickerToggle>:first-child{flex:0 0 auto!important}
 .countryPickerToggle>span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left}
 .countryPickerCaret{flex:0 0 auto!important;color:var(--ink);font-size:12px}
-.countryPickerPanel{position:absolute;left:0;right:0;top:calc(100% + 6px);z-index:60;background:#fff;border:1px solid var(--line);border-radius:14px;box-shadow:0 18px 45px rgba(23,35,75,.16);padding:10px;display:grid;gap:8px}
-.countryPickerPanel>input{height:38px;border:1px solid var(--line);border-radius:9px;padding:0 11px;font-size:13px;outline:0}
+.countryPickerPanel{position:absolute;left:0;right:0;top:calc(100% + 6px);z-index:60;background:#fff;border:1px solid var(--line);border-radius:14px;box-shadow:0 18px 45px rgba(23,35,75,.16);padding:10px;display:grid;gap:8px;max-width:100%;box-sizing:border-box;overflow-x:hidden}
+.countryPickerPanel>input{height:38px;border:1px solid var(--line);border-radius:9px;padding:0 11px;font-size:13px;outline:0;box-sizing:border-box;width:100%}
 .countryPickerPanel>input:focus{border-color:#6763b4}
-.countryPickerList{max-height:260px;overflow-y:auto;display:grid;gap:2px}
-.countryPickerList button{display:flex;align-items:center;gap:9px;border:0;background:transparent;border-radius:8px;padding:8px 9px;font-size:13px;color:var(--ink);text-align:left;cursor:pointer;width:100%}
+.countryPickerList{max-height:260px;overflow-y:auto;display:grid;gap:2px;min-width:0}
+.countryPickerList button{display:flex;align-items:center;gap:9px;border:0;background:transparent;border-radius:8px;padding:8px 9px;font-size:13px;color:var(--ink);text-align:left;cursor:pointer;width:100%;min-width:0;box-sizing:border-box}
 .countryPickerList button:hover,.countryPickerList button:focus-visible{background:#f4f2f7;outline:none}
 .countryPickerList button.active{background:#efeaff;font-weight:700}
 .countryPickerList button img{width:18px;height:13px;object-fit:cover;border-radius:2px;box-shadow:0 0 0 1px rgba(0,0,0,.08);flex:0 0 auto}
+.countryPickerList button>span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .countryPickerEmpty{margin:6px 2px;font-size:12px;color:var(--muted)}
 @media(max-width:950px){.exploreFilters{grid-template-columns:1fr 1fr}}
-@media(max-width:620px){.exploreFilters{grid-template-columns:1fr;gap:8px;margin-top:20px}}
+@media(max-width:620px){.exploreFilters{grid-template-columns:1fr;gap:8px;margin-top:20px}.countryPickerPanel{left:0;right:0}}
