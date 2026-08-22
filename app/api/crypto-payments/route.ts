@@ -1,16 +1,170 @@
-import {NextRequest,NextResponse}from"next/server";
-import {FieldValue}from"firebase-admin/firestore";
-import {z}from"zod";
-import {db}from"@/lib/firebase-admin";
-import {findBingXDepositByHash}from"@/lib/bingx-readonly";
-import {notifyUser}from"@/lib/notifications";
-import {publicError,userFromRequest}from"@/lib/server";
+import {NextRequest,NextResponse} from "next/server";
+import {FieldValue} from "firebase-admin/firestore";
+import {z} from "zod";
+import {db} from "@/lib/firebase-admin";
+import {findBingXDepositByHash} from "@/lib/bingx-readonly";
+import {notifyUser} from "@/lib/notifications";
+import {publicError,userFromRequest} from "@/lib/server";
+
 const submitSchema=z.object({transactionHash:z.string().trim().min(8).max(300),currency:z.enum(["USDT","USDC"]),amount:z.number().positive().max(1000000),purpose:z.string().trim().max(100).optional(),orderId:z.string().trim().min(1).max(200).optional()});
 type Stage="submitted"|"approved"|"rejected";
-async function isAdmin(req:NextRequest){const u=await userFromRequest(req),profile=(await db.collection("users").doc(u.uid).get()).data()||{},allowed=String(process.env.SUPER_ADMIN_EMAIL||process.env.ADMIN_EMAIL||"").toLowerCase(),email=String(u.email||"").toLowerCase();if(profile.role!=="admin"&&(!allowed||email!==allowed))throw new Error("Administrator access required.");return u;}
-async function users(orderId:string){const s=await db.collection("orders").doc(orderId).get();if(!s.exists)return null;const o=s.data()||{};return{buyerId:String(o.buyerId||""),sellerId:String(o.sellerId||""),number:String(o.orderNumber||orderId)};}
-async function notifyOrder(orderId:string,stage:Stage,currency:string,amount:number){const u=await users(orderId);if(!u)return;const link=`/?order=${encodeURIComponent(orderId)}`,a=`${amount.toFixed(2)} ${currency}`,submitted=stage==="submitted",approved=stage==="approved";await Promise.all([u.buyerId?notifyUser({userId:u.buyerId,type:`crypto_payment_${stage}`,eventId:`${orderId}_${stage}`,title:submitted?"Crypto payment submitted":approved?"Crypto payment approved":"Crypto payment rejected",message:submitted?`Your ${a} payment is awaiting administrator approval.`:approved?`Your ${a} payment was approved. The order is now active.`:`Your ${a} payment was rejected. Please submit a valid transaction.`,link,email:true}):Promise.resolve(),u.sellerId?notifyUser({userId:u.sellerId,type:`crypto_payment_${stage}_seller`,eventId:`${orderId}_${stage}`,title:submitted?"Buyer submitted crypto payment":approved?"Crypto payment approved":"Crypto payment rejected",message:submitted?`A buyer submitted ${a} for your order. It is awaiting administrator approval.`:approved?`The ${a} payment was approved. You can now proceed with the order.`:`The crypto payment was rejected and the order remains unpaid.`,link,email:true}):Promise.resolve()]);}
-export async function POST(req:NextRequest){try{const user=await userFromRequest(req),body=submitSchema.parse(await req.json()),hash=body.transactionHash.toLowerCase(),ref=db.collection("cryptoPayments").doc();if(body.orderId){const o=await users(body.orderId);if(!o)throw Error("Order not found.");if(o.buyerId!==user.uid)throw Error("Only the buyer can submit payment for this order.");}await db.runTransaction(async tx=>{const d=await tx.get(db.collection("cryptoPayments").where("transactionHash","==",hash).limit(1));if(!d.empty)throw Error("This transaction hash has already been submitted.");tx.set(ref,{userId:user.uid,userEmail:user.email||"",transactionHash:hash,currency:body.currency,amount:body.amount,purpose:body.orderId?"order":body.purpose||"deposit",orderId:body.orderId||null,status:"pending",bingxMatchStatus:"pending-verification",submittedAt:FieldValue.serverTimestamp()});});if(body.orderId)await notifyOrder(body.orderId,"submitted",body.currency,body.amount);else await notifyUser({userId:user.uid,type:"crypto_deposit_submitted",eventId:ref.id,title:"Crypto payment submitted",message:`Your ${body.amount} ${body.currency} deposit is awaiting administrator approval.`,link:"/?seller=1",email:true});return NextResponse.json({ok:true,id:ref.id,status:"pending"});}catch(e){const x=e instanceof z.ZodError?{message:"Invalid payment submission.",status:400}:publicError(e);return NextResponse.json({error:x.message},{status:x.status});}}
-export async function GET(req:NextRequest){try{await isAdmin(req);const status=req.nextUrl.searchParams.get("status")||"pending";let docs;if(status==="admin"){const[pending,approved,rejected]=await Promise.all([db.collection("cryptoPayments").where("status","==","pending").limit(200).get(),db.collection("cryptoPayments").where("status","==","approved").limit(200).get(),db.collection("cryptoPayments").where("status","==","rejected").limit(200).get()]);docs=[...pending.docs,...approved.docs,...rejected.docs];}else{const snap=await db.collection("cryptoPayments").where("status","==",status).limit(200).get();docs=snap.docs;}docs.sort((a,b)=>(b.data().submittedAt?.seconds||0)-(a.data().submittedAt?.seconds||0));return NextResponse.json({payments:docs.map(d=>({id:d.id,...d.data()}))});}catch(e){const x=publicError(e);return NextResponse.json({error:x.message},{status:x.status});}}
-export async function PATCH(req:NextRequest){try{const admin=await isAdmin(req),body=z.object({id:z.string().min(1),action:z.enum(["approve","reject"])}).parse(await req.json()),ref=db.collection("cryptoPayments").doc(body.id);let orderId="",currency="",amount=0,stage:Stage|undefined,result:Record<string,unknown>={};if(body.action==="approve"){const snap=await ref.get();if(!snap.exists)throw Error("Payment not found.");const p=snap.data()||{};if(p.status!=="pending")throw Error("This payment has already been processed.");currency=String(p.currency||"USDT").toUpperCase();amount=Number(p.amount||0);const hash=String(p.transactionHash||p.txHash||"").trim().toLowerCase();if(!hash)throw Error("Transaction hash is missing.");const match=await findBingXDepositByHash(hash,[currency==="USDC"?"USDC":"USDT",currency==="USDC"?"USDT":"USDC"]);if(!match)throw Error("BingX could not find an incoming USDT/USDC deposit with this exact transaction hash. The payment cannot be approved until the hashes match.");const matchedAmount=Number(match.amount||0);if(!Number.isFinite(matchedAmount)||Math.abs(matchedAmount-amount)>0.000001)throw Error(`BingX hash matched, but the amount does not match. User submitted ${amount} ${currency}; BingX reports ${matchedAmount} ${String(match.coin||currency)}.`);if(String(match.coin||"").toUpperCase()!==currency)throw Error(`BingX hash matched, but the currency does not match. Expected ${currency}.`);const order=String(p.purpose)==="order"&&p.orderId;await db.runTransaction(async tx=>{const s=await tx.get(ref);if(!s.exists)throw Error("Payment not found.");const latest=s.data()||{};if(latest.status!=="pending")throw Error("This payment has already been processed.");if(order){orderId=String(latest.orderId);tx.update(db.collection("orders").doc(orderId),{status:"in-progress",paymentStatus:"approved",cryptoPaymentId:ref.id,paidAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp()});stage="approved";result={ok:true,status:"approved",orderId,bingxVerified:true};}else{tx.set(db.collection("users").doc(String(latest.userId)),{balance:FieldValue.increment(amount),updatedAt:FieldValue.serverTimestamp()},{merge:true});result={ok:true,status:"approved",creditedAmount:amount,bingxVerified:true};}tx.update(ref,{status:"approved",approvedAt:FieldValue.serverTimestamp(),approvedBy:admin.uid,bingxVerified:true,bingxTxId:String(match.txId||hash),bingxCoin:String(match.coin||currency),bingxMatchedAmount:matchedAmount,bingxMatchedAt:FieldValue.serverTimestamp()});});}else{await db.runTransaction(async tx=>{const s=await tx.get(ref);if(!s.exists)throw Error("Payment not found.");const p=s.data()||{};if(p.status!=="pending")throw Error("This payment has already been processed.");orderId=String(p.purpose)==="order"?String(p.orderId||""):"";currency=String(p.currency||"USDT");amount=Number(p.amount||0);if(orderId){tx.update(db.collection("orders").doc(orderId),{status:"awaiting-crypto-payment",paymentStatus:"rejected",updatedAt:FieldValue.serverTimestamp()});stage="rejected";}tx.update(ref,{status:"rejected",rejectedAt:FieldValue.serverTimestamp(),rejectedBy:admin.uid});result={ok:true,status:"rejected"};});}if(orderId&&stage)await notifyOrder(orderId,stage,currency,amount);return NextResponse.json(result);}catch(e){const x=e instanceof z.ZodError?{message:"Invalid payment action.",status:400}:publicError(e);return NextResponse.json({error:x.message},{status:x.status});}}
-export async function DELETE(req:NextRequest){try{await isAdmin(req);const id=req.nextUrl.searchParams.get("id")||"";if(!id)throw Error("Transaction id required.");const ref=db.collection("cryptoPayments").doc(id),snap=await ref.get();if(!snap.exists)throw Error("Transaction not found.");await ref.delete();return NextResponse.json({ok:true,deleted:id});}catch(e){const x=publicError(e);return NextResponse.json({error:x.message},{status:x.status});}}
+
+async function isAdmin(req:NextRequest){
+  const u=await userFromRequest(req),profile=(await db.collection("users").doc(u.uid).get()).data()||{},allowed=String(process.env.SUPER_ADMIN_EMAIL||process.env.ADMIN_EMAIL||"").toLowerCase(),email=String(u.email||"").toLowerCase();
+  if(profile.role!=="admin"&&(!allowed||email!==allowed))throw new Error("Administrator access required.");
+  return u;
+}
+
+async function users(orderId:string){
+  const s=await db.collection("orders").doc(orderId).get();
+  if(!s.exists)return null;
+  const o=s.data()||{};
+  return {buyerId:String(o.buyerId||""),sellerId:String(o.sellerId||""),number:String(o.orderNumber||orderId)};
+}
+
+async function notifyOrder(orderId:string,stage:Stage,currency:string,amount:number){
+  const u=await users(orderId);
+  if(!u)return;
+  const link=`/?order=${encodeURIComponent(orderId)}`,a=`${amount.toFixed(2)} ${currency}`,submitted=stage==="submitted",approved=stage==="approved";
+  await Promise.all([
+    u.buyerId?notifyUser({userId:u.buyerId,type:`crypto_payment_${stage}`,eventId:`${orderId}_${stage}`,title:submitted?"Crypto payment submitted":approved?"Crypto payment approved":"Crypto payment rejected",message:submitted?`Your ${a} payment is awaiting administrator approval.`:approved?`Your ${a} payment was approved. The order is now active.`:`Your ${a} payment was rejected. Please submit a valid transaction.`,link,email:true}):Promise.resolve(),
+    u.sellerId?notifyUser({userId:u.sellerId,type:`crypto_payment_${stage}_seller`,eventId:`${orderId}_${stage}`,title:submitted?"Buyer submitted crypto payment":approved?"Crypto payment approved":"Crypto payment rejected",message:submitted?`A buyer submitted ${a} for your order. It is awaiting administrator approval.`:approved?`The ${a} payment was approved. You can now proceed with the order.`:`The crypto payment was rejected and the order remains unpaid.`,link,email:true}):Promise.resolve(),
+  ]);
+}
+
+/** Credits a pending payment. When `bypass` is set (DANGER APPROVE) the BingX lookup is skipped entirely. */
+async function approvePayment(id:string,adminUid:string,bypass:boolean):Promise<{orderId:string;currency:string;amount:number;stage?:Stage}>{
+  const ref=db.collection("cryptoPayments").doc(id);
+  const snap=await ref.get();
+  if(!snap.exists)throw Error("Payment not found.");
+  const p=snap.data()||{};
+  if(p.status!=="pending")throw Error("This payment has already been processed.");
+  const currency=String(p.currency||"USDT").toUpperCase();
+  const amount=Number(p.amount||0);
+  const hash=String(p.transactionHash||p.txHash||"").trim().toLowerCase();
+
+  let bingxVerified=false,bingxTxId=hash,bingxCoin=currency,bingxMatchedAmount=amount;
+  if(!bypass){
+    if(!hash)throw Error("Transaction hash is missing.");
+    const match=await findBingXDepositByHash(hash,[currency==="USDC"?"USDC":"USDT",currency==="USDC"?"USDT":"USDC"]);
+    if(!match)throw Error("BingX could not find an incoming USDT/USDC deposit with this exact transaction hash. The payment cannot be approved until the hashes match.");
+    const matchedAmount=Number(match.amount||0);
+    if(!Number.isFinite(matchedAmount)||Math.abs(matchedAmount-amount)>0.000001)throw Error(`BingX hash matched, but the amount does not match. User submitted ${amount} ${currency}; BingX reports ${matchedAmount} ${String(match.coin||currency)}.`);
+    if(String(match.coin||"").toUpperCase()!==currency)throw Error(`BingX hash matched, but the currency does not match. Expected ${currency}.`);
+    bingxVerified=true;
+    bingxTxId=String(match.txId||hash);
+    bingxCoin=String(match.coin||currency);
+    bingxMatchedAmount=matchedAmount;
+  }
+
+  const isOrder=String(p.purpose)==="order"&&p.orderId;
+  let orderId="",stage:Stage|undefined;
+  await db.runTransaction(async tx=>{
+    const s=await tx.get(ref);
+    if(!s.exists)throw Error("Payment not found.");
+    const latest=s.data()||{};
+    if(latest.status!=="pending")throw Error("This payment has already been processed.");
+    if(isOrder){
+      orderId=String(latest.orderId);
+      tx.update(db.collection("orders").doc(orderId),{status:"in-progress",paymentStatus:"approved",cryptoPaymentId:ref.id,paidAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp()});
+      stage="approved";
+    }else{
+      tx.set(db.collection("users").doc(String(latest.userId)),{balance:FieldValue.increment(amount),updatedAt:FieldValue.serverTimestamp()},{merge:true});
+    }
+    tx.update(ref,{status:"approved",approvedAt:FieldValue.serverTimestamp(),approvedBy:adminUid,bingxVerified,bingxBypassed:bypass,bingxTxId,bingxCoin,bingxMatchedAmount,bingxMatchedAt:FieldValue.serverTimestamp()});
+  });
+  return {orderId,currency,amount,stage};
+}
+
+export async function POST(req:NextRequest){try{
+  const user=await userFromRequest(req),body=submitSchema.parse(await req.json()),hash=body.transactionHash.toLowerCase(),ref=db.collection("cryptoPayments").doc();
+  if(body.orderId){
+    const o=await users(body.orderId);
+    if(!o)throw Error("Order not found.");
+    if(o.buyerId!==user.uid)throw Error("Only the buyer can submit payment for this order.");
+  }
+  await db.runTransaction(async tx=>{
+    const d=await tx.get(db.collection("cryptoPayments").where("transactionHash","==",hash).limit(1));
+    if(!d.empty)throw Error("This transaction hash has already been submitted.");
+    tx.set(ref,{userId:user.uid,userEmail:user.email||"",transactionHash:hash,currency:body.currency,amount:body.amount,purpose:body.orderId?"order":body.purpose||"deposit",orderId:body.orderId||null,status:"pending",bingxMatchStatus:"pending-verification",submittedAt:FieldValue.serverTimestamp()});
+  });
+  if(body.orderId)await notifyOrder(body.orderId,"submitted",body.currency,body.amount);
+  else await notifyUser({userId:user.uid,type:"crypto_deposit_submitted",eventId:ref.id,title:"Crypto payment submitted",message:`Your ${body.amount} ${body.currency} deposit is awaiting administrator approval.`,link:"/?seller=1",email:true});
+  return NextResponse.json({ok:true,id:ref.id,status:"pending"});
+}catch(e){const x=e instanceof z.ZodError?{message:"Invalid payment submission.",status:400}:publicError(e);return NextResponse.json({error:x.message},{status:x.status});}}
+
+export async function GET(req:NextRequest){try{
+  await isAdmin(req);
+  const status=req.nextUrl.searchParams.get("status")||"pending";
+  let docs;
+  if(status==="admin"){
+    const[pending,approved,rejected]=await Promise.all([db.collection("cryptoPayments").where("status","==","pending").limit(200).get(),db.collection("cryptoPayments").where("status","==","approved").limit(200).get(),db.collection("cryptoPayments").where("status","==","rejected").limit(200).get()]);
+    docs=[...pending.docs,...approved.docs,...rejected.docs];
+  }else{
+    const snap=await db.collection("cryptoPayments").where("status","==",status).limit(200).get();
+    docs=snap.docs;
+  }
+  docs.sort((a,b)=>(b.data().submittedAt?.seconds||0)-(a.data().submittedAt?.seconds||0));
+  return NextResponse.json({payments:docs.map(d=>({id:d.id,...d.data()}))});
+}catch(e){const x=publicError(e);return NextResponse.json({error:x.message},{status:x.status});}}
+
+const patchSchema=z.object({id:z.string().min(1).optional(),action:z.enum(["approve","reject","forceApprove","autoVerifyAll"])});
+
+export async function PATCH(req:NextRequest){try{
+  const admin=await isAdmin(req),body=patchSchema.parse(await req.json());
+
+  if(body.action==="autoVerifyAll"){
+    const pendingSnap=await db.collection("cryptoPayments").where("status","==","pending").limit(100).get();
+    let approvedCount=0;
+    const results:{id:string;approved:boolean;error?:string}[]=[];
+    for(const doc of pendingSnap.docs){
+      try{
+        const {orderId,currency,amount,stage}=await approvePayment(doc.id,admin.uid,false);
+        if(orderId&&stage)await notifyOrder(orderId,stage,currency,amount);
+        approvedCount++;
+        results.push({id:doc.id,approved:true});
+      }catch(err){
+        results.push({id:doc.id,approved:false,error:err instanceof Error?err.message:"BingX verification failed."});
+      }
+    }
+    return NextResponse.json({ok:true,checked:pendingSnap.size,approved:approvedCount,results});
+  }
+
+  if(!body.id)return NextResponse.json({error:"Payment id is required."},{status:400});
+  const ref=db.collection("cryptoPayments").doc(body.id);
+
+  if(body.action==="approve"||body.action==="forceApprove"){
+    const {orderId,currency,amount,stage}=await approvePayment(body.id,admin.uid,body.action==="forceApprove");
+    if(orderId&&stage)await notifyOrder(orderId,stage,currency,amount);
+    return NextResponse.json({ok:true,status:"approved",orderId:orderId||undefined,bingxVerified:body.action==="approve",bypassed:body.action==="forceApprove"});
+  }
+
+  // reject
+  let orderId="",currency="",amount=0,stage:Stage|undefined;
+  await db.runTransaction(async tx=>{
+    const s=await tx.get(ref);
+    if(!s.exists)throw Error("Payment not found.");
+    const p=s.data()||{};
+    if(p.status!=="pending")throw Error("This payment has already been processed.");
+    orderId=String(p.purpose)==="order"?String(p.orderId||""):"";
+    currency=String(p.currency||"USDT");
+    amount=Number(p.amount||0);
+    if(orderId){
+      tx.update(db.collection("orders").doc(orderId),{status:"awaiting-crypto-payment",paymentStatus:"rejected",updatedAt:FieldValue.serverTimestamp()});
+      stage="rejected";
+    }
+    tx.update(ref,{status:"rejected",rejectedAt:FieldValue.serverTimestamp(),rejectedBy:admin.uid});
+  });
+  if(orderId&&stage)await notifyOrder(orderId,stage,currency,amount);
+  return NextResponse.json({ok:true,status:"rejected"});
+}catch(e){const x=e instanceof z.ZodError?{message:"Invalid payment action.",status:400}:publicError(e);return NextResponse.json({error:x.message},{status:x.status});}}
+
+export async function DELETE(req:NextRequest){try{
+  await isAdmin(req);
+  const id=req.nextUrl.searchParams.get("id")||"";
+  if(!id)throw Error("Transaction id required.");
+  const ref=db.collection("cryptoPayments").doc(id),snap=await ref.get();
+  if(!snap.exists)throw Error("Transaction not found.");
+  await ref.delete();
+  return NextResponse.json({ok:true,deleted:id});
+}catch(e){const x=publicError(e);return NextResponse.json({error:x.message},{status:x.status});}}
