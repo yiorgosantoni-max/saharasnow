@@ -159,7 +159,7 @@ export default function AdminCrypto(){
     </section>
     <section style={{padding:16,border:"1px solid #ddd",borderRadius:14,marginBottom:24}}>
       <b>⏱ Automatic five-day clearance</b>
-      <p>After delivery, buyers have a review window equal to the package's delivery time (e.g. 1-day delivery = 24 hours, 30-day delivery = 30 days) to open a dispute or request a revision. Once that window passes with no dispute, the order enters the standard five-day clearance period; when that ends, USDT/USDC seller earnings are released less the 5% withdrawal fee.</p>
+      <p>After delivery, buyers have a review window equal to the package's delivery time (e.g. 1-day delivery = 24 hours, 30-day delivery = 30 days) to open a dispute or request a revision. Once that window passes with no dispute, the order enters the standard five-day clearance period; when that ends, the full USDT/USDC seller earnings are released to the seller's available balance — no fee is taken here. The 5% withdrawal fee is only ever deducted later, when the seller actually requests a withdrawal.</p>
       <label>Check every <input type="number" min={5} max={300} value={auto} onChange={ev=>setAuto(Math.max(5,Number(ev.target.value)||10))} style={{width:70,margin:"0 6px"}}/> seconds.</label>
       <button onClick={()=>void runClearance()} style={{marginLeft:10}}>Run now</button>
       {lastRun&&<small style={{marginLeft:10}}>Last check: {lastRun.toLocaleTimeString()}</small>}
