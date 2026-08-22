@@ -4,6 +4,7 @@ import { Resend } from "resend";
 import { z } from "zod";
 import { adminAuth, db } from "@/lib/firebase-admin";
 import { notifyUser } from "@/lib/notifications";
+import { postSystemMessage } from "@/lib/messaging";
 import { required, userFromRequest } from "@/lib/server";
 
 export const runtime = "nodejs";
@@ -194,6 +195,7 @@ export async function PATCH(req: NextRequest) {
         writtenInTransaction = true;
         if(current.buyerId) await notifyUser({userId:String(current.buyerId),type:`order_${body.action}`,eventId:body.id,title:body.action === "release" ? "Order completed" : "Order refunded",message:body.action === "release" ? `Order #${String(current.orderNumber||body.id)} has been released and completed.` : `Order #${String(current.orderNumber||body.id)} was marked refunded${body.note ? `: ${body.note}` : "."}`,link:`/?order=${body.id}`,email:true});
         if(current.sellerId) await notifyUser({userId:String(current.sellerId),type:`order_${body.action}`,eventId:body.id,title:body.action === "release" ? "Earnings released" : "Order refunded",message:body.action === "release" ? `Order #${String(current.orderNumber||body.id)} was released. ${((Number(current.sellerNetCents ?? current.serviceCents)||0)/100).toFixed(2)} USD has been added to your seller earnings.` : `Order #${String(current.orderNumber||body.id)} was refunded, so no seller earnings were released.`,link:"/?seller=1",email:true});
+        if(current.buyerId&&current.sellerId) await postSystemMessage({buyerId:String(current.buyerId),sellerId:String(current.sellerId),orderId:body.id,text:body.action==="release"?`✅ Order #${String(current.orderNumber||body.id)} was released and marked complete by an administrator.`:`↩️ Order #${String(current.orderNumber||body.id)} was refunded by an administrator.${body.note?` Note: ${body.note}`:""}`});
       }
     } else if (body.resource === "ticket") {
       if (body.action !== "close") throw new Error("INVALID_ACTION");
