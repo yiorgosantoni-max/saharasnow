@@ -1,4 +1,9 @@
 .seller.sellerLink,.grid.autoScroll .seller{flex-wrap:wrap!important;row-gap:4px!important}
+.sellerAvatarWrap{position:relative;display:inline-flex;flex:0 0 auto}
+.sellerAvatarWrap>img,.sellerAvatarWrap>i{height:30px;width:30px;background:#f1e9ff;color:#583b89;border-radius:50%;display:grid;place-items:center;font-weight:800;font-style:normal;object-fit:cover;flex:0 0 auto;font-size:11px}
+.presenceDot{position:absolute;right:-1px;bottom:-1px;width:9px;height:9px;border-radius:50%;border:2px solid #fff;background:#9aa1ad}
+.presenceDot.online{background:#27b868}
+.presenceDot.away{background:#f4ad32}
 .seller>div,.sellerLink>div{min-width:0!important;flex:0 1 auto!important}
 .sellerTier{display:inline-flex!important;align-items:center;gap:3px;align-self:flex-start!important;margin-top:3px!important;flex:0 0 auto;padding:4px 7px;border-radius:999px;font-size:9px;font-weight:800;color:#fff;white-space:nowrap;line-height:1}
 .sellerTier.tierNew{background:#16a34a}
