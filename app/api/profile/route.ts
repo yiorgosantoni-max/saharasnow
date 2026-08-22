@@ -46,16 +46,14 @@ export async function PATCH(req: NextRequest) {
     const userRef = db.collection("users").doc(user.uid);
     const nextUsername = body.username || "";
     await db.runTransaction(async (tx) => {
-      const userSnap = await tx.get(userRef);
-      const previousUsername = String(userSnap.data()?.username || "");
-      if (nextUsername !== previousUsername) {
-        if (nextUsername) {
-          const usernameRef = db.collection("usernames").doc(nextUsername);
-          const usernameSnap = await tx.get(usernameRef);
-          if (usernameSnap.exists && usernameSnap.data()?.uid !== user.uid) throw new Error("That username is already taken.");
-          tx.set(usernameRef, {uid: user.uid});
-        }
-        if (previousUsername) tx.delete(db.collection("usernames").doc(previousUsername));
+      if (nextUsername) {
+        // Check the live username field on every account rather than a
+        // separate reservation record, so this also catches usernames set
+        // before uniqueness was enforced (no reservation doc would exist
+        // for those) instead of only new claims made through this check.
+        const conflictSnap = await tx.get(db.collection("users").where("username","==",nextUsername).limit(1));
+        const conflict = conflictSnap.docs[0];
+        if (conflict && conflict.id !== user.uid) throw new Error("That username is already taken.");
       }
       tx.set(userRef, {...body,email:user.email,updatedAt:FieldValue.serverTimestamp()}, {merge:true});
     });
