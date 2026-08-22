@@ -10,6 +10,7 @@ export const dynamic = "force-dynamic";
 const profileSchema = z.object({
   firstName: z.string().trim().min(1).max(80),
   lastName: z.string().trim().min(1).max(80),
+  username: z.string().trim().toLowerCase().regex(/^[a-z0-9_]{3,20}$/, "Username must be 3-20 characters: letters, numbers and underscore only.").optional().or(z.literal("")),
   country: z.string().trim().min(2).max(100),
   mode: z.enum(["BUYING", "SELLER"]).optional(),
   profileImageUrl: z.string().url().optional().or(z.literal(""))
@@ -42,7 +43,22 @@ export async function PATCH(req: NextRequest) {
   try {
     const user = await userFromRequest(req);
     const body = profileSchema.parse(await req.json());
-    await db.collection("users").doc(user.uid).set({...body,email:user.email,updatedAt:FieldValue.serverTimestamp()},{merge:true});
+    const userRef = db.collection("users").doc(user.uid);
+    const nextUsername = body.username || "";
+    await db.runTransaction(async (tx) => {
+      const userSnap = await tx.get(userRef);
+      const previousUsername = String(userSnap.data()?.username || "");
+      if (nextUsername !== previousUsername) {
+        if (nextUsername) {
+          const usernameRef = db.collection("usernames").doc(nextUsername);
+          const usernameSnap = await tx.get(usernameRef);
+          if (usernameSnap.exists && usernameSnap.data()?.uid !== user.uid) throw new Error("That username is already taken.");
+          tx.set(usernameRef, {uid: user.uid});
+        }
+        if (previousUsername) tx.delete(db.collection("usernames").doc(previousUsername));
+      }
+      tx.set(userRef, {...body,email:user.email,updatedAt:FieldValue.serverTimestamp()}, {merge:true});
+    });
     return NextResponse.json({ok:true});
   } catch (error) {
     const result = publicError(error);
