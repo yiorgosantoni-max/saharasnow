@@ -53,3 +53,12 @@ export function countryFlag(value: unknown, fallback = "📍"): string {
 export function resolveCountryCode(country: unknown, code: unknown): string {
   return countryCode(code) || countryCode(country);
 }
+
+/** Every ISO country as {code, name}, sorted alphabetically by English name. */
+export function allCountries(): { code: string; name: string }[] {
+  const names = displayNames();
+  if (!names) return [];
+  return ISO_CODES.map(code => ({ code, name: names.of(code) || code }))
+    .filter(entry => entry.name && entry.name !== entry.code)
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
