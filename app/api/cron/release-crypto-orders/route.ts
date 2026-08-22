@@ -38,8 +38,8 @@ export async function GET(req:NextRequest){
         const ledgerRef=db.collection("balanceTransactions").doc(`crypto-release-${doc.id}`);if((await tx.get(ledgerRef)).exists){tx.set(doc.ref,{status:"completed-released",releasedAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp()},{merge:true});return;}
         const balanceField=currency==="USDC"?"usdcBalanceCents":"usdtBalanceCents";
         tx.set(db.collection("users").doc(sellerId),{[balanceField]:FieldValue.increment(net),availableBalanceCents:FieldValue.increment(net),updatedAt:FieldValue.serverTimestamp()},{merge:true});
-        tx.set(ledgerRef,{userId:sellerId,type:"crypto-order-release",amountCents:net,currency,orderId:doc.id,txHash:String(current.txHash||""),status:"released",createdAt:FieldValue.serverTimestamp(),releasedBy:"system-5-day-window"});
-        tx.set(doc.ref,{status:"completed-released",releasedAt:FieldValue.serverTimestamp(),releasedBy:"system-5-day-window",updatedAt:FieldValue.serverTimestamp()},{merge:true});
+        tx.set(ledgerRef,{userId:sellerId,type:"crypto-order-release",amountCents:net,currency,orderId:doc.id,txHash:String(current.txHash||""),status:"released",createdAt:FieldValue.serverTimestamp(),releasedBy:"system-3-day-window"});
+        tx.set(doc.ref,{status:"completed-released",releasedAt:FieldValue.serverTimestamp(),releasedBy:"system-3-day-window",updatedAt:FieldValue.serverTimestamp()},{merge:true});
       });
       released++;
     }catch{skipped++;}
