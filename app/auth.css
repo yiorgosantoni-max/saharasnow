@@ -22,3 +22,9 @@ footer .brand img{width:46px;height:46px;background:#fff;border-radius:50%}
 .withdrawSummary{display:grid;grid-template-columns:1fr auto;gap:10px;background:var(--cream);border-radius:10px;padding:16px;margin:18px 0;font-size:12px}
 .withdrawSummary span{color:var(--muted)}
 .withdrawSummary strong{font-size:18px;color:#23866b}
+.withdrawCurrencyChoice{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+.withdrawCurrencyChoice button{text-align:left;padding:12px;border:1px solid var(--line);border-radius:10px;background:#fff;cursor:pointer;font:inherit;color:var(--ink)}
+.withdrawCurrencyChoice button:disabled{cursor:not-allowed;opacity:.45}
+.withdrawCurrencyChoice button small{display:block;margin-top:3px;font-weight:500;color:var(--muted);font-size:11px}
+.withdrawCurrencyChoice button.active{border-color:#26a17b;box-shadow:0 0 0 2px rgba(38,161,123,.13)}
+.withdrawCurrencyChoice button:nth-child(2).active{border-color:#2775ca;box-shadow:0 0 0 2px rgba(39,117,202,.13)}
