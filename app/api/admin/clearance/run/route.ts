@@ -4,8 +4,6 @@ import {db} from "@/lib/firebase-admin";
 import {notifyUser} from "@/lib/notifications";
 import {publicError,userFromRequest} from "@/lib/server";
 
-const FEE=.05;
-
 async function isAdmin(req:NextRequest){
   const u=await userFromRequest(req),p=(await db.collection("users").doc(u.uid).get()).data()||{};
   if(p.role!=="admin"&&String(u.email||"").toLowerCase()!=="yiorgosantoni@gmail.com")throw Error("Administrator access required.");
@@ -44,24 +42,34 @@ export async function POST(req:NextRequest){
         continue;
       }
 
-      // Stage 2 -> release: the five-day clearance has ended, release seller earnings.
+      // Stage 2 -> release: the five-day clearance has ended. Release the seller's full
+      // net earnings now, in the order's own currency (USDT/USDC), with no fee taken here.
+      // The 5% withdrawal fee is only ever deducted later, when the seller actually
+      // requests a withdrawal (see app/api/withdrawals/route.ts) — never at release time.
       const end=o.clearanceEndsAt?.toDate?.()||new Date(o.clearanceEndsAt||0);
       if(!end.getTime()||end.getTime()>now||o.releasedAt||o.releasedEarly)continue;
 
-      let sellerId="",gross=0,net=0;
+      let sellerId="",netCents=0,currency="";
       await db.runTransaction(async tx=>{
         const fresh=await tx.get(d.ref),x=fresh.data()||{};
         if(x.releasedAt||x.releasedEarly||x.disputeStatus==="open"||x.disputed===true)return;
+        const ledgerRef=db.collection("balanceTransactions").doc(`clearance-release-${d.id}`);
+        if((await tx.get(ledgerRef)).exists){
+          tx.set(d.ref,{status:"completed-released",clearanceStatus:"released",releasedAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp()},{merge:true});
+          return;
+        }
         sellerId=String(x.sellerId||"");
-        gross=Math.max(0,Number(x.sellerEarnings??x.sellerAmount??(x.totalCents!=null?Number(x.totalCents)/100:0)));
-        const fee=Number((gross*FEE).toFixed(2));
-        net=Number((gross-fee).toFixed(2));
-        const sr=db.collection("users").doc(sellerId),ss=await tx.get(sr),s=ss.data()||{},balance=Math.max(0,Number(s.balance||s.availableBalance||s.sellerBalance||0)),withdrawable=Math.max(0,Number(s.withdrawableBalance??s.releasedEarnings??balance));
-        tx.set(sr,{balance:Number((balance+gross).toFixed(2)),availableBalance:Number((balance+gross).toFixed(2)),sellerBalance:Number((balance+gross).toFixed(2)),withdrawableBalance:Number((withdrawable+net).toFixed(2)),releasedEarnings:Number((withdrawable+net).toFixed(2)),lastReleasedGross:gross,lastReleasedWithdrawalFee:fee,lastReleasedNet:net,withdrawalFeePercent:5,updatedAt:FieldValue.serverTimestamp()},{merge:true});
-        tx.set(d.ref,{status:"completed",clearanceStatus:"released",releasedAt:FieldValue.serverTimestamp(),releasedBy:"automatic",releasedGross:gross,releasedWithdrawalFee:fee,releasedNet:net,updatedAt:FieldValue.serverTimestamp()},{merge:true});
+        netCents=Math.max(0,Math.round(Number(x.sellerNetCents??x.serviceCents??x.totalCents??0)));
+        currency=String(x.paymentCurrency||"USDT").toUpperCase();
+        if(!sellerId||netCents<=0)return;
+        const balanceField=currency==="USDC"?"usdcBalanceCents":"usdtBalanceCents";
+        tx.set(db.collection("users").doc(sellerId),{[balanceField]:FieldValue.increment(netCents),availableBalanceCents:FieldValue.increment(netCents),updatedAt:FieldValue.serverTimestamp()},{merge:true});
+        tx.set(ledgerRef,{userId:sellerId,type:"clearance-release",amountCents:netCents,currency,orderId:d.id,status:"released",createdAt:FieldValue.serverTimestamp(),releasedBy:"automatic-five-day-clearance"});
+        tx.set(d.ref,{status:"completed-released",clearanceStatus:"released",releasedAt:FieldValue.serverTimestamp(),releasedBy:"automatic",releasedNetCents:netCents,updatedAt:FieldValue.serverTimestamp()},{merge:true});
       });
-      if(sellerId){
-        await notifyUser({userId:sellerId,type:"earnings_released",eventId:`${d.id}_automatic_release`,title:"Five-day clearance completed",message:`Your ${gross.toFixed(2)} earnings were automatically released. ${net.toFixed(2)} is available for withdrawal after the 5% withdrawal fee.`,link:"/?seller=1",email:true});
+      if(sellerId&&netCents>0){
+        const netAmount=(netCents/100).toFixed(2);
+        await notifyUser({userId:sellerId,type:"earnings_released",eventId:`${d.id}_automatic_release`,title:"Five-day clearance completed",message:`Your ${netAmount} ${currency} was automatically released to your available balance. The 5% fee is only deducted when you request a withdrawal.`,link:"/?seller=1",email:true});
         released++;
       }
     }
