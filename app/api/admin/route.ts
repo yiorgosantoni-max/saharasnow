@@ -14,9 +14,11 @@ const ADMIN_EMAIL = (process.env.SUPER_ADMIN_EMAIL || "yiorgosantoni@gmail.com")
 const actionSchema = z.object({
   resource: z.enum(["kyc", "listing", "withdrawal", "order", "ticket", "user", "users", "report", "auditLogs"]),
   id: z.string().min(1).max(200),
-  action: z.enum(["approve", "reject", "reupload", "delete", "paid", "release", "refund", "close", "suspend", "restore", "clearAll", "deleteSelected", "forceLogoutAll", "deleteSelectedOrders", "deleteSelectedListings"]),
+  action: z.enum(["approve", "reject", "reupload", "delete", "paid", "release", "refund", "resolve", "close", "suspend", "restore", "clearAll", "deleteSelected", "forceLogoutAll", "deleteSelectedOrders", "deleteSelectedListings"]),
   ids: z.array(z.string().min(1).max(200)).max(200).optional(),
-  note: z.string().trim().max(500).optional()
+  note: z.string().trim().max(500).optional(),
+  sellerAmount: z.number().min(0).max(1000000).optional(),
+  buyerAmount: z.number().min(0).max(1000000).optional()
 });
 
 async function admin(req: NextRequest) {
@@ -185,10 +187,25 @@ export async function PATCH(req: NextRequest) {
       writtenInTransaction = true;
       if(current.sellerId) await notifyUser({userId:String(current.sellerId),type:`withdrawal_${body.action}`,eventId:body.id,title:body.action === "paid" ? "Withdrawal paid" : "Withdrawal rejected",message:body.action === "paid" ? `Your withdrawal of $${(Number(current.netCents||0)/100).toFixed(2)} was marked as paid by the administrator.` : `Your withdrawal was rejected${body.note ? `: ${body.note}` : ". The balance has been restored and is available for a new withdrawal request."}`,link:"/?seller=1",email:true});
     } else if (body.resource === "order") {
-      if (!['release','refund','delete'].includes(body.action)) throw new Error("INVALID_ACTION");
+      if (!['release','refund','delete','resolve'].includes(body.action)) throw new Error("INVALID_ACTION");
       if(body.action === "delete") {
         await ref.delete();
         for(const uid of [current.buyerId,current.sellerId].filter(Boolean)) await notifyUser({userId:String(uid),type:"order_deleted",eventId:body.id,title:"Order/dispute removed",message:`Order #${String(current.orderNumber||body.id)} was removed from the administrator dashboard.${body.note ? ` ${body.note}` : ""}`});
+      } else if (body.action === "resolve") {
+        if (String(current.status) !== "disputed") throw new Error("Only disputed orders can be resolved with a split.");
+        const totalCents = Number(current.serviceCents || 0);
+        const sellerAmountCents = Math.round(Number(body.sellerAmount || 0) * 100);
+        const buyerAmountCents = Math.round(Number(body.buyerAmount || 0) * 100);
+        if (sellerAmountCents < 0 || buyerAmountCents < 0) throw new Error("Amounts cannot be negative.");
+        if (sellerAmountCents + buyerAmountCents > totalCents) throw new Error("Seller + buyer amounts cannot exceed the order total.");
+        const currencyLabel = String(current.paymentCurrency || "USDT");
+        const status = sellerAmountCents > 0 ? "completed-released" : "refunded";
+        changes = {...changes,status,resolutionNote:body.note||"",resolvedBy:actingAdmin.email,resolvedAt:FieldValue.serverTimestamp(),disputeResolution:{sellerAmountCents,buyerAmountCents,currency:currencyLabel,resolvedBy:actingAdmin.email,note:body.note||""}};
+        await db.runTransaction(async tx=>{const fresh=await tx.get(ref);const value=fresh.data()||{};if(String(value.status)!=="disputed")throw new Error("This dispute was already resolved.");tx.set(ref,changes,{merge:true});if(sellerAmountCents>0&&value.sellerId)tx.set(db.collection("users").doc(String(value.sellerId)),{availableBalanceCents:FieldValue.increment(sellerAmountCents)},{merge:true});});
+        writtenInTransaction = true;
+        if(current.buyerId) await notifyUser({userId:String(current.buyerId),type:"dispute_resolved",eventId:body.id,title:"Dispute resolved",message:`Order #${String(current.orderNumber||body.id)} dispute resolved: ${(sellerAmountCents/100).toFixed(2)} ${currencyLabel} to the seller, ${(buyerAmountCents/100).toFixed(2)} ${currencyLabel} refunded to you.${body.note?` Note: ${body.note}`:""}`,link:`/?order=${body.id}`,email:true});
+        if(current.sellerId) await notifyUser({userId:String(current.sellerId),type:"dispute_resolved",eventId:body.id,title:"Dispute resolved",message:`Order #${String(current.orderNumber||body.id)} dispute resolved: ${(sellerAmountCents/100).toFixed(2)} ${currencyLabel} released to your balance, ${(buyerAmountCents/100).toFixed(2)} ${currencyLabel} refunded to the buyer.${body.note?` Note: ${body.note}`:""}`,link:"/?seller=1",email:true});
+        if(current.buyerId&&current.sellerId) await postSystemMessage({buyerId:String(current.buyerId),sellerId:String(current.sellerId),orderId:body.id,text:`⚖️ Dispute resolved by administrator for order #${String(current.orderNumber||body.id)}: ${(sellerAmountCents/100).toFixed(2)} ${currencyLabel} to seller, ${(buyerAmountCents/100).toFixed(2)} ${currencyLabel} refunded to buyer.${body.note?` Note: ${body.note}`:""}`});
       } else {
         changes = {...changes,status:body.action === "release" ? "completed-released" : "refunded",resolutionNote:body.note||"",resolvedBy:actingAdmin.email,resolvedAt:FieldValue.serverTimestamp()};
         await db.runTransaction(async tx=>{const fresh=await tx.get(ref);const value=fresh.data()||{};if(["completed-released","refunded"].includes(String(value.status)))throw new Error("Order already resolved");tx.set(ref,changes,{merge:true});if(body.action==="release"&&value.sellerId&&Number(value.sellerNetCents ?? value.serviceCents)>0)tx.set(db.collection("users").doc(String(value.sellerId)),{availableBalanceCents:FieldValue.increment(Number(value.sellerNetCents ?? value.serviceCents))},{merge:true});});
