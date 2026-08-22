@@ -1,8 +1,10 @@
 .seller.sellerLink,.grid.autoScroll .seller{flex-wrap:wrap!important;row-gap:4px!important;align-items:flex-start!important}
 .seller.sellerLink>img,.seller.sellerLink>i,.sellerLink>img,.sellerLink>i{margin-top:2px}
-.seller>div,.sellerLink>div{min-width:0!important;flex:1 1 auto!important}
+.seller>div,.sellerLink>div{min-width:0!important;flex:1 1 auto!important;display:flex!important;flex-direction:column!important;align-items:flex-start!important;min-height:80px!important}
 .seller.sellerLink b,.sellerLink b,.seller.sellerLink>div>b,.sellerLink>div>b{white-space:normal!important;overflow:visible!important;text-overflow:clip!important;max-width:none!important;display:block;word-break:break-word;line-height:1.25}
 .presenceText{display:block;font-size:10px;margin-top:2px}
+.sellerCountryRow{display:flex!important;align-items:center;gap:4px;font-size:10px;color:#6b7280;margin-top:2px}
+.sellerCountryRow img{width:14px;height:10px;object-fit:cover;border-radius:2px;box-shadow:0 0 0 1px rgba(0,0,0,.08);flex:0 0 auto}
 .sellerTier{display:inline-flex!important;align-items:center;gap:3px;align-self:flex-start!important;margin-top:3px!important;flex:0 0 auto;padding:4px 7px;border-radius:999px;font-size:9px;font-weight:800;color:#fff;white-space:nowrap;line-height:1}
 .sellerTier.tierNew{background:#16a34a}
 .sellerTier.tierHot{background:#dc2626}
