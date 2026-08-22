@@ -78,31 +78,28 @@ export async function GET(req:NextRequest){try{
   return NextResponse.json({payments:docs.map(d=>({id:d.id,...d.data()}))});
 }catch(e){const x=publicError(e);return NextResponse.json({error:x.message},{status:x.status});}}
 
-export async function PATCH(req:NextRequest){try{
-  const admin=await assertAdmin(req);
-  const {paymentId,action}=await req.json();
-  const id=String(paymentId||""),act=String(action||"");
-  if(!id||!["approve","reject"].includes(act))return NextResponse.json({error:"Invalid request."},{status:400});
+/** Verifies (unless `bypass`) and credits a listing-credit payment. */
+async function approveListingPayment(id:string,adminUid:string,bypass:boolean):Promise<{sellerId:string;creditsAdded:number;coveredListingIds:string[];currency:string}>{
   const paymentRef=db.collection("listingCreditCryptoPayments").doc(id);
   const snap=await paymentRef.get();
-  if(!snap.exists)return NextResponse.json({error:"Payment not found."},{status:404});
+  if(!snap.exists)throw Error("Payment not found.");
   const payment=snap.data()||{};
-  if(String(payment.status)!=="payment-submitted")return NextResponse.json({error:"This payment is not awaiting verification."},{status:400});
-
-  if(act==="reject"){
-    await paymentRef.set({status:"rejected",rejectedAt:FieldValue.serverTimestamp(),rejectedBy:admin.uid,updatedAt:FieldValue.serverTimestamp()},{merge:true});
-    if(payment.sellerId)await notifyUser({userId:String(payment.sellerId),type:"listing_credits_rejected",eventId:id,title:"Listing credit payment rejected",message:`Your ${PRICE} ${String(payment.currency)} payment could not be verified and was rejected. Please submit a valid transaction hash.`,link:"/?services=1"});
-    return NextResponse.json({ok:true,status:"rejected"});
-  }
+  if(String(payment.status)!=="payment-submitted")throw Error("This payment is not awaiting verification.");
 
   const currency=String(payment.currency||"USDT").toUpperCase() as "USDT"|"USDC";
   const hash=String(payment.txHashNormalized||payment.txHash||"").trim().toLowerCase();
-  if(!hash)return NextResponse.json({error:"Transaction hash is missing."},{status:400});
-  const match=await findBingXDepositByHash(hash,[currency==="USDC"?"USDC":"USDT",currency==="USDC"?"USDT":"USDC"]);
-  if(!match)return NextResponse.json({error:"BingX could not find an incoming USDT/USDC deposit with this exact transaction hash. The payment cannot be approved until the hashes match."},{status:400});
-  const matchedAmount=Number(match.amount||0);
-  if(!Number.isFinite(matchedAmount)||Math.abs(matchedAmount-PRICE)>0.000001)return NextResponse.json({error:`BingX hash matched, but the amount does not match. Expected ${PRICE} ${currency}; BingX reports ${matchedAmount} ${String(match.coin||currency)}.`},{status:400});
-  if(String(match.coin||"").toUpperCase()!==currency)return NextResponse.json({error:`BingX hash matched, but the currency does not match. Expected ${currency}.`},{status:400});
+  let bingxVerified=false,bingxTxId=hash,bingxMatchedAmount=PRICE;
+  if(!bypass){
+    if(!hash)throw Error("Transaction hash is missing.");
+    const match=await findBingXDepositByHash(hash,[currency==="USDC"?"USDC":"USDT",currency==="USDC"?"USDT":"USDC"]);
+    if(!match)throw Error("BingX could not find an incoming USDT/USDC deposit with this exact transaction hash. The payment cannot be approved until the hashes match.");
+    const matchedAmount=Number(match.amount||0);
+    if(!Number.isFinite(matchedAmount)||Math.abs(matchedAmount-PRICE)>0.000001)throw Error(`BingX hash matched, but the amount does not match. Expected ${PRICE} ${currency}; BingX reports ${matchedAmount} ${String(match.coin||currency)}.`);
+    if(String(match.coin||"").toUpperCase()!==currency)throw Error(`BingX hash matched, but the currency does not match. Expected ${currency}.`);
+    bingxVerified=true;
+    bingxTxId=String(match.txId||hash);
+    bingxMatchedAmount=matchedAmount;
+  }
 
   const sellerId=String(payment.sellerId||"");
   let coveredListingIds:string[]=[];
@@ -114,17 +111,56 @@ export async function PATCH(req:NextRequest){try{
     const eligible=sellerListings.docs.filter(d=>d.data().status==="awaiting-listing-fee").sort((a,b)=>a.id===String(payment.listingId)?-1:b.id===String(payment.listingId)?1:0).slice(0,PACK_SIZE);
     coveredListingIds=eligible.map(d=>d.id);
     creditsAdded=PACK_SIZE-coveredListingIds.length;
-    tx.set(paymentRef,{status:"approved",approvedAt:FieldValue.serverTimestamp(),approvedBy:admin.uid,bingxVerified:true,bingxTxId:String(match.txId||hash),bingxMatchedAmount:matchedAmount,creditsAdded,coveredListingIds,updatedAt:FieldValue.serverTimestamp()},{merge:true});
+    tx.set(paymentRef,{status:"approved",approvedAt:FieldValue.serverTimestamp(),approvedBy:adminUid,bingxVerified,bingxBypassed:bypass,bingxTxId,bingxMatchedAmount,creditsAdded,coveredListingIds,updatedAt:FieldValue.serverTimestamp()},{merge:true});
     const userRef=db.collection("users").doc(sellerId);
     tx.set(userRef,{listingCredits:FieldValue.increment(creditsAdded),updatedAt:FieldValue.serverTimestamp()},{merge:true});
     eligible.forEach(d=>tx.set(d.ref,{status:"pending-approval",feeCoveredBy:"crypto-credit-pack",listingFeePaidAmount:PRICE,listingFeePaidCurrency:currency,listingCreditsPurchased:PACK_SIZE,listingFeePaymentId:id,listingFeePaidAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp()},{merge:true}));
   });
 
-  if(sellerId)await notifyUser({userId:sellerId,type:"listing_credits_approved",eventId:id,title:"Listing credits confirmed",message:`Your ${PRICE} ${currency} payment was verified against the blockchain. ${PACK_SIZE} listing slots are now covered and awaiting administrator content approval.`,link:"/?services=1"});
+  if(sellerId)await notifyUser({userId:sellerId,type:"listing_credits_approved",eventId:id,title:"Listing credits confirmed",message:`Your ${PRICE} ${currency} payment was verified. ${PACK_SIZE} listing slots are now covered and awaiting administrator content approval.`,link:"/?services=1"});
   for(const listingId of coveredListingIds){
     const ref=db.collection("listings").doc(listingId),listingSnap=await ref.get(),data=listingSnap.data()||{};
     if(!listingSnap.exists)continue;
-    await notifyAdmin({subject:`Listing approval required: ${String(data.title||"Paid service")}`,heading:"Crypto-paid service awaiting approval",message:"The listing-credit crypto payment was verified against BingX. Review the listing content before final approval.",details:{Title:String(data.title||"Service"),Seller:sellerId,Category:String(data.category||""),Subcategory:String(data.subcategory||""),"Listing ID":listingId},actionLabel:"Review listing",actionPath:"/admin"});
+    await notifyAdmin({subject:`Listing approval required: ${String(data.title||"Paid service")}`,heading:"Crypto-paid service awaiting approval",message:"The listing-credit crypto payment was verified. Review the listing content before final approval.",details:{Title:String(data.title||"Service"),Seller:sellerId,Category:String(data.category||""),Subcategory:String(data.subcategory||""),"Listing ID":listingId},actionLabel:"Review listing",actionPath:"/admin"});
   }
-  return NextResponse.json({ok:true,status:"approved",creditsAdded,coveredListingIds,bingxVerified:true});
+  return {sellerId,creditsAdded,coveredListingIds,currency};
+}
+
+export async function PATCH(req:NextRequest){try{
+  const admin=await assertAdmin(req);
+  const {paymentId,action}=await req.json();
+  const id=String(paymentId||""),act=String(action||"");
+  if(!["approve","reject","forceApprove","autoVerifyAll"].includes(act))return NextResponse.json({error:"Invalid request."},{status:400});
+
+  if(act==="autoVerifyAll"){
+    const pendingSnap=await db.collection("listingCreditCryptoPayments").where("status","==","payment-submitted").limit(100).get();
+    let approvedCount=0;
+    const results:{id:string;approved:boolean;error?:string}[]=[];
+    for(const doc of pendingSnap.docs){
+      try{
+        await approveListingPayment(doc.id,admin.uid,false);
+        approvedCount++;
+        results.push({id:doc.id,approved:true});
+      }catch(err){
+        results.push({id:doc.id,approved:false,error:err instanceof Error?err.message:"BingX verification failed."});
+      }
+    }
+    return NextResponse.json({ok:true,checked:pendingSnap.size,approved:approvedCount,results});
+  }
+
+  if(!id)return NextResponse.json({error:"Payment id is required."},{status:400});
+  const paymentRef=db.collection("listingCreditCryptoPayments").doc(id);
+
+  if(act==="reject"){
+    const snap=await paymentRef.get();
+    if(!snap.exists)return NextResponse.json({error:"Payment not found."},{status:404});
+    const payment=snap.data()||{};
+    if(String(payment.status)!=="payment-submitted")return NextResponse.json({error:"This payment is not awaiting verification."},{status:400});
+    await paymentRef.set({status:"rejected",rejectedAt:FieldValue.serverTimestamp(),rejectedBy:admin.uid,updatedAt:FieldValue.serverTimestamp()},{merge:true});
+    if(payment.sellerId)await notifyUser({userId:String(payment.sellerId),type:"listing_credits_rejected",eventId:id,title:"Listing credit payment rejected",message:`Your ${PRICE} ${String(payment.currency)} payment could not be verified and was rejected. Please submit a valid transaction hash.`,link:"/?services=1"});
+    return NextResponse.json({ok:true,status:"rejected"});
+  }
+
+  const {creditsAdded,coveredListingIds}=await approveListingPayment(id,admin.uid,act==="forceApprove");
+  return NextResponse.json({ok:true,status:"approved",creditsAdded,coveredListingIds,bingxVerified:act==="approve",bypassed:act==="forceApprove"});
 }catch(e){const x=publicError(e);return NextResponse.json({error:x.message},{status:x.status});}}
