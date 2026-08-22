@@ -21,7 +21,7 @@ export async function POST(req:NextRequest){
       const o=s.data()||{};
       if(o.status!=="delivered"||o.releasedEarly||o.releasedAt)throw Error("Order is not awaiting automatic clearance.");
       const end=o.clearanceEndsAt?.toDate?.()||new Date(o.clearanceEndsAt||0);
-      if(Date.now()<end.getTime())throw Error("The five-day clearance period has not ended.");
+      if(Date.now()<end.getTime())throw Error("The three-day clearance period has not ended.");
       if(o.disputeStatus==="open"||o.disputed===true)throw Error("This order has an open dispute.");
       sellerId=String(o.sellerId||"");
       netCents=Math.max(0,Math.round(Number(o.sellerNetCents??o.serviceCents??o.totalCents??0)));
