@@ -4,6 +4,41 @@ import {z}from"zod";
 import {db}from"@/lib/firebase-admin";
 import {publicError,userFromRequest}from"@/lib/server";
 import {notifyUser}from"@/lib/notifications";
+
 const bodySchema=z.object({orderId:z.string().min(1)});
-const WITHDRAWAL_FEE_RATE=0.05;
-export async function POST(req:NextRequest){try{const adminUser=await userFromRequest(req);const admin=(await db.collection("users").doc(adminUser.uid).get()).data()||{};if(admin.role!=="admin"&&String(admin.email||adminUser.email||"").toLowerCase()!=="yiorgosantoni@gmail.com")return NextResponse.json({error:"Administrator access required."},{status:403});const {orderId}=bodySchema.parse(await req.json());const orderRef=db.collection("orders").doc(orderId);let sellerId="",gross=0,net=0,cryptoPaymentId="";await db.runTransaction(async tx=>{const snap=await tx.get(orderRef);if(!snap.exists)throw new Error("Order not found.");const order=snap.data()||{};if(order.releasedEarly===true||String(order.clearanceStatus||"").toLowerCase()==="released")throw new Error("These seller earnings have already been released.");sellerId=String(order.sellerId||"");cryptoPaymentId=String(order.cryptoPaymentId||"");gross=Math.max(0,Number(order.sellerEarnings??order.sellerAmount??(order.totalCents!=null?Number(order.totalCents)/100:0)));if(!sellerId)throw new Error("Order seller not found.");const fee=Number((gross*WITHDRAWAL_FEE_RATE).toFixed(2));net=Number((gross-fee).toFixed(2));const sellerRef=db.collection("users").doc(sellerId),sellerSnap=await tx.get(sellerRef);const seller=sellerSnap.data()||{};const current=Math.max(0,Number(seller.balance||seller.availableBalance||seller.sellerBalance||0));const currentWithdrawable=Math.max(0,Number(seller.withdrawableBalance??seller.releasedEarnings??current));tx.set(sellerRef,{balance:Number((current+gross).toFixed(2)),availableBalance:Number((current+gross).toFixed(2)),sellerBalance:Number((current+gross).toFixed(2)),withdrawableBalance:Number((currentWithdrawable+net).toFixed(2)),releasedEarnings:Number((currentWithdrawable+net).toFixed(2)),lastReleasedGross:gross,lastReleasedWithdrawalFee:fee,lastReleasedNet:net,withdrawalFeePercent:5,updatedAt:FieldValue.serverTimestamp()},{merge:true});tx.set(orderRef,{status:"completed",clearanceStatus:"released",releasedEarly:true,releasedAt:FieldValue.serverTimestamp(),releasedBy:adminUser.uid,releasedGross:gross,releasedWithdrawalFee:fee,releasedNet:net,updatedAt:FieldValue.serverTimestamp()},{merge:true});if(cryptoPaymentId)tx.set(db.collection("cryptoPayments").doc(cryptoPaymentId),{releasedEarly:true,releasedAt:FieldValue.serverTimestamp(),releasedBy:adminUser.uid},{merge:true});});await notifyUser({userId:sellerId,type:"earnings_released_early",eventId:orderId,title:"Earnings released early",message:`An administrator released your pending earnings of ${gross.toFixed(2)} early. ${net.toFixed(2)} is available for withdrawal after the 5% withdrawal fee.`,link:"/?seller=1",email:true});return NextResponse.json({ok:true,orderId,gross,withdrawalFee:Number((gross*WITHDRAWAL_FEE_RATE).toFixed(2)),net});}catch(e){const x=e instanceof z.ZodError?{message:"Invalid release request.",status:400}:publicError(e);return NextResponse.json({error:x.message},{status:x.status});}}
+
+export async function POST(req:NextRequest){
+  try{
+    const adminUser=await userFromRequest(req);
+    const admin=(await db.collection("users").doc(adminUser.uid).get()).data()||{};
+    if(admin.role!=="admin"&&String(admin.email||adminUser.email||"").toLowerCase()!=="yiorgosantoni@gmail.com")return NextResponse.json({error:"Administrator access required."},{status:403});
+    const {orderId}=bodySchema.parse(await req.json());
+    const orderRef=db.collection("orders").doc(orderId);
+    let sellerId="",netCents=0,currency="",cryptoPaymentId="";
+    await db.runTransaction(async tx=>{
+      const snap=await tx.get(orderRef);
+      if(!snap.exists)throw new Error("Order not found.");
+      const order=snap.data()||{};
+      if(order.releasedEarly===true||String(order.clearanceStatus||"").toLowerCase()==="released")throw new Error("These seller earnings have already been released.");
+      sellerId=String(order.sellerId||"");
+      cryptoPaymentId=String(order.cryptoPaymentId||"");
+      netCents=Math.max(0,Math.round(Number(order.sellerNetCents??order.serviceCents??order.totalCents??0)));
+      currency=String(order.paymentCurrency||"USDT").toUpperCase();
+      if(!sellerId)throw new Error("Order seller not found.");
+      if(netCents<=0)throw new Error("Invalid order earnings amount.");
+      const ledgerRef=db.collection("balanceTransactions").doc(`clearance-release-${orderId}`);
+      if((await tx.get(ledgerRef)).exists)throw new Error("These seller earnings have already been released.");
+      const balanceField=currency==="USDC"?"usdcBalanceCents":"usdtBalanceCents";
+      tx.set(db.collection("users").doc(sellerId),{[balanceField]:FieldValue.increment(netCents),availableBalanceCents:FieldValue.increment(netCents),updatedAt:FieldValue.serverTimestamp()},{merge:true});
+      tx.set(ledgerRef,{userId:sellerId,type:"clearance-release",amountCents:netCents,currency,orderId,status:"released",createdAt:FieldValue.serverTimestamp(),releasedBy:adminUser.uid});
+      tx.set(orderRef,{status:"completed-released",clearanceStatus:"released",releasedEarly:true,releasedAt:FieldValue.serverTimestamp(),releasedBy:adminUser.uid,releasedNetCents:netCents,updatedAt:FieldValue.serverTimestamp()},{merge:true});
+      if(cryptoPaymentId)tx.set(db.collection("cryptoPayments").doc(cryptoPaymentId),{releasedEarly:true,releasedAt:FieldValue.serverTimestamp(),releasedBy:adminUser.uid},{merge:true});
+    });
+    const netAmount=(netCents/100).toFixed(2);
+    await notifyUser({userId:sellerId,type:"earnings_released_early",eventId:orderId,title:"Earnings released early",message:`An administrator released your earnings of ${netAmount} ${currency} early to your available balance. The 5% fee is only deducted when you request a withdrawal.`,link:"/?seller=1",email:true});
+    return NextResponse.json({ok:true,orderId,netCents,currency});
+  }catch(e){
+    const x=e instanceof z.ZodError?{message:"Invalid release request.",status:400}:publicError(e);
+    return NextResponse.json({error:x.message},{status:x.status});
+  }
+}
