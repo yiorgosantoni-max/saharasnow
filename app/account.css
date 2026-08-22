@@ -2,7 +2,7 @@
 
 /* Shared compact surface: use the same proportions as the Create a Service listing box. */
 .accountModal,.customInvoiceModal{border-radius:20px;box-shadow:0 24px 70px rgba(16,24,40,.18)}
-.accountModal{width:min(980px,calc(100vw - 24px));height:min(95dvh,760px);max-height:95dvh;padding:30px;overflow:hidden}
+.accountModal{width:min(980px,100%);height:auto;max-height:95vh;padding:30px;overflow:hidden}
 .customInvoiceModal{width:min(980px,calc(100vw - 24px));max-height:95dvh;padding:30px;overflow:auto}
 .accountModal .accountTabs{margin:14px 0 18px}
 .customOffersPanel form{display:grid;gap:14px;margin-top:6px}
