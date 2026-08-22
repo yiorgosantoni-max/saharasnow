@@ -28,6 +28,10 @@ export async function userFromRequest(req: NextRequest) {
   return adminAuth.verifyIdToken(token, true);
 }
 
+export function orderNumberFor(id: string, currency = "USD") {
+  return `${currency}-${id.replace(/[^a-z0-9]/gi, "").slice(-10).toUpperCase()}`;
+}
+
 export function publicError(error: unknown) {
   const message = error instanceof Error ? error.message : "Unexpected error";
   return message === "UNAUTHENTICATED" ? {message, status: 401} : {message, status: 400};
