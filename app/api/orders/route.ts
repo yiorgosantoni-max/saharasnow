@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/firebase-admin";
 import { notifyAdminInApp, notifyUser } from "@/lib/notifications";
+import { postSystemMessage } from "@/lib/messaging";
 import { publicError, releaseEligibleSellerOrders, userFromRequest } from "@/lib/server";
 
 export const runtime = "nodejs";
@@ -20,14 +21,14 @@ export async function GET(req:NextRequest){
       db.collection("orders").where("sellerId","==",user.uid).limit(200).get()
     ]);
     // Every seller sees an actionable delivery notification once an order enters work.
-    await Promise.all(seller.docs.filter(d=>["paid","in-progress"].includes(String(d.data().status))&&!d.data().deliveryNotificationSentAt).map(async d=>{
+    await Promise.all(seller.docs.filter(d=>["paid","in-progress","crypto-received"].includes(String(d.data().status))&&!d.data().deliveryNotificationSentAt).map(async d=>{
       const o=d.data(),number=String(o.orderNumber||d.id);
       await d.ref.set({deliveryNotificationSentAt:FieldValue.serverTimestamp()},{merge:true});
       await notifyUser({userId:user.uid,type:"delivery_ready",eventId:d.id,title:`Order #${number} is ready for delivery`,message:"Your order is in progress. Open the delivery page to review and upload the final files.",link:`/?order=${d.id}`,email:true});
       await notifyAdminInApp({type:"order_in_progress",eventId:d.id,title:`Order #${number} in progress`,message:"The seller has been notified to prepare the order delivery.",link:"/admin"});
     }));
     const docs=[...buyer.docs,...seller.docs.filter(d=>!buyer.docs.some(b=>b.id===d.id))]
-      .filter(d=>["paid","in-progress","delivered","disputed","completed-released","refunded"].includes(String(d.data()?.status)));
+      .filter(d=>["paid","in-progress","crypto-received","delivered","disputed","completed-released","refunded"].includes(String(d.data()?.status)));
     const orders=await Promise.all(docs.map(async doc=>{const data=doc.data();const listing=(await db.collection("listings").doc(String(data.listingId||"")).get()).data()||{};return {id:doc.id,...data,title:String(data.title||listing.title||"Service"),createdAt:dateValue(data.createdAt),paidAt:dateValue(data.paidAt),disputeDeadline:dateValue(data.disputeDeadline),isBuyer:String(data.buyerId)===user.uid};}));
     orders.sort((a,b)=>String(b.createdAt||"").localeCompare(String(a.createdAt||"")));
     return NextResponse.json({orders});
@@ -48,6 +49,8 @@ export async function POST(req:NextRequest){
     await notifyUser({userId:String(order.sellerId),type:"dispute_opened",eventId:body.orderId,title:`Dispute opened for order #${String(order.orderNumber||body.orderId)}`,message:`The buyer opened a dispute. The order is now held for administrator review.`,link:`/?order=${body.orderId}`,email:true});
     await notifyUser({userId:user.uid,type:"dispute_opened",eventId:body.orderId,title:`Dispute opened for order #${String(order.orderNumber||body.orderId)}`,message:"Your dispute was submitted to the administrator. Seller funds remain held while it is reviewed.",link:`/?order=${body.orderId}`});
     await notifyAdminInApp({type:"dispute_opened",eventId:body.orderId,title:"New order dispute",message:`A buyer opened a dispute for order #${String(order.orderNumber||body.orderId)}.`,link:"/admin"});
+    const sellerId=String(order.sellerId||"");
+    if(sellerId)await postSystemMessage({buyerId:user.uid,sellerId,orderId:body.orderId,text:`⚖️ A dispute was opened for order #${String(order.orderNumber||body.orderId)}. An administrator will review it: "${body.reason}"`});
     return NextResponse.json({ok:true});
   }catch(error){const x=publicError(error);return NextResponse.json({error:x.message},{status:x.status});}
 }
