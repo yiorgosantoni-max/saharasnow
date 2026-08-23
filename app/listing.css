@@ -12,6 +12,11 @@
 .listingStep label>span{margin-left:auto;color:var(--muted);font-weight:400}
 .listingStep input,.listingStep textarea,.listingStep select,.packageEditor input,.packageEditor textarea,.packageEditor select{border:1px solid #dcdfea;border-radius:9px;padding:13px 14px;outline:none;background:#fff;color:var(--ink);width:100%}
 .listingStep input:focus,.listingStep textarea:focus,.listingStep select:focus{border-color:#075ee8;box-shadow:0 0 0 3px #075ee818}
+.titlePrefixField{display:flex;align-items:stretch;border:1px solid #dcdfea;border-radius:9px;overflow:hidden;background:#fff}
+.titlePrefixField:focus-within{border-color:#075ee8;box-shadow:0 0 0 3px #075ee818}
+.titlePrefixLock{display:flex;align-items:center;padding:0 12px;background:#f2f4fb;color:#075ee8;font-weight:800;font-size:14px;white-space:nowrap;user-select:none}
+.titlePrefixField input{border:0!important;border-radius:0!important;box-shadow:none!important}
+.titlePrefixField input:focus{box-shadow:none!important}
 .listingTwo{display:grid;grid-template-columns:1fr 1fr;gap:15px}
 .listingTwo label{display:flex;flex-direction:column;gap:8px;font-size:12px;font-weight:700;margin-bottom:18px}
 .packageEditor{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
