@@ -16,11 +16,16 @@ export async function GET(req: NextRequest) {
     if (!sellerId) return NextResponse.json({ sellerId: "", orderCount: 0, reviewCount: 0, averageRating: 0 });
 
     // These are service-level stats, not seller-wide stats, so the badge and rating on
-    // every card describe the actual service being viewed.
+    // every card describe the actual service being viewed. orderCount counts every order
+    // that actually got placed (payment confirmed), not just ones that finished clearance -
+    // otherwise a brand-new order stays invisible for days while it works through the
+    // dispute/clearance pipeline.
+    const unplacedStatuses = ["awaiting-crypto-payment", "payment-submitted"];
     const [ordersSnap, reviewsSnap] = await Promise.all([
-      db.collection("orders").where("listingId", "==", listingId).where("status", "==", "completed-released").get(),
+      db.collection("orders").where("listingId", "==", listingId).get(),
       db.collection("reviews").where("listingId", "==", listingId).get(),
     ]);
+    const orderCount = ordersSnap.docs.filter((doc) => !unplacedStatuses.includes(String(doc.data()?.status))).length;
 
     const ratings = reviewsSnap.docs
       .map((doc) => Number(doc.data()?.rating))
@@ -28,7 +33,7 @@ export async function GET(req: NextRequest) {
     const reviewCount = ratings.length;
     const averageRating = reviewCount ? Number((ratings.reduce((sum, rating) => sum + rating, 0) / reviewCount).toFixed(1)) : 0;
 
-    return NextResponse.json({ sellerId, orderCount: ordersSnap.size, reviewCount, averageRating });
+    return NextResponse.json({ sellerId, orderCount, reviewCount, averageRating });
   } catch {
     return NextResponse.json({ sellerId: "", orderCount: 0, reviewCount: 0, averageRating: 0 });
   }
