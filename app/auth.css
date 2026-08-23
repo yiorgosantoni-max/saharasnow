@@ -1,7 +1,6 @@
 button:disabled{cursor:not-allowed;opacity:.5}
-.brand img{width:44px;height:44px;object-fit:contain;margin-right:3px}
+.brand img{width:46px;height:46px;object-fit:contain}
 .brand span{display:inline-block}
-footer .brand img{width:46px;height:46px;background:#fff;border-radius:50%}
 .authModal{width:min(440px,100%);text-align:left}
 .authLogo{width:72px;height:72px;object-fit:contain;display:block;margin:-5px 0 10px}
 .fieldLabel{display:block;font-size:12px;font-weight:800;margin:20px 0 7px}
