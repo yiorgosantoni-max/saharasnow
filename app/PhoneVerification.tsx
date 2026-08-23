@@ -5,7 +5,7 @@ import { getClientAuth } from "@/lib/firebase-client";
 
 const PHONE_PATTERN = /^\+[1-9]\d{7,14}$/;
 
-export default function PhoneVerification({ phoneVerified, phoneOnFile, onVerified }: { phoneVerified: boolean; phoneOnFile: string; onVerified: (phoneNumber: string) => void }) {
+export default function PhoneVerification({ phoneVerified, phoneOnFile, onVerified, allowSetNumber = true }: { phoneVerified: boolean; phoneOnFile: string; onVerified: (phoneNumber: string) => void; allowSetNumber?: boolean }) {
   const [phoneInput, setPhoneInput] = useState(phoneOnFile);
   const [codeSent, setCodeSent] = useState(false);
   const [code, setCode] = useState("");
@@ -17,7 +17,7 @@ export default function PhoneVerification({ phoneVerified, phoneOnFile, onVerifi
 
   async function sendCode() {
     setNotice("");
-    const phone = phoneInput.trim();
+    const phone = (allowSetNumber ? phoneInput : phoneOnFile).trim();
     if (!PHONE_PATTERN.test(phone)) { setNotice("Enter your phone number in international format, e.g. +15551234567."); return; }
     setBusy(true);
     try {
@@ -76,12 +76,18 @@ export default function PhoneVerification({ phoneVerified, phoneOnFile, onVerifi
     }
   }
 
+  if (!allowSetNumber && !phoneVerified) {
+    return <div className="listingStep" style={{ margin: 0 }}>
+      <p className="listingNotice" role="alert">You haven't verified a mobile number yet. Add and verify one from your account's Profile tab first, then come back here.</p>
+    </div>;
+  }
+
   return <div className="listingStep" style={{ margin: 0 }}>
     <div ref={recaptchaContainerRef} />
     {phoneVerified && !codeSent && <p>✓ Verified: <b>{phoneOnFile}</b></p>}
-    <label>{phoneVerified ? "Change mobile number" : "Mobile number"} <small>Include your country code, e.g. +1 555 123 4567</small>
+    {allowSetNumber && <label>{phoneVerified ? "Change mobile number" : "Mobile number"} <small>Include your country code, e.g. +1 555 123 4567</small>
       <input value={phoneInput} onChange={e => setPhoneInput(e.target.value)} placeholder="+15551234567" disabled={codeSent} />
-    </label>
+    </label>}
     {!codeSent ? <div className="listingActions" style={{ marginTop: 0, justifyContent: "flex-start" }}>
       <button type="button" className="primary" disabled={busy} onClick={sendCode}>{busy ? "Sending…" : "Send SMS code"}</button>
     </div> : <>
