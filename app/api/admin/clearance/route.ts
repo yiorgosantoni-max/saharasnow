@@ -21,7 +21,7 @@ export async function POST(req:NextRequest){
       const o=s.data()||{};
       if(o.status!=="delivered"||o.releasedEarly||o.releasedAt)throw Error("Order is not awaiting automatic clearance.");
       const end=o.clearanceEndsAt?.toDate?.()||new Date(o.clearanceEndsAt||0);
-      if(Date.now()<end.getTime())throw Error("The three-day clearance period has not ended.");
+      if(Date.now()<end.getTime())throw Error("The one-day clearance period has not ended.");
       if(o.disputeStatus==="open"||o.disputed===true)throw Error("This order has an open dispute.");
       sellerId=String(o.sellerId||"");
       netCents=Math.max(0,Math.round(Number(o.sellerNetCents??o.serviceCents??o.totalCents??0)));
@@ -31,7 +31,7 @@ export async function POST(req:NextRequest){
       if((await tx.get(ledgerRef)).exists)throw Error("These seller earnings have already been released.");
       const balanceField=currency==="USDC"?"usdcBalanceCents":"usdtBalanceCents";
       tx.set(db.collection("users").doc(sellerId),{[balanceField]:FieldValue.increment(netCents),availableBalanceCents:FieldValue.increment(netCents),updatedAt:FieldValue.serverTimestamp()},{merge:true});
-      tx.set(ledgerRef,{userId:sellerId,type:"clearance-release",amountCents:netCents,currency,orderId,status:"released",releasedBy:"automatic"});
+      tx.set(ledgerRef,{userId:sellerId,type:"clearance-release",amountCents:netCents,currency,orderId,status:"released",createdAt:FieldValue.serverTimestamp(),releasedBy:"automatic"});
       tx.set(ref,{status:"completed-released",clearanceStatus:"released",releasedAt:FieldValue.serverTimestamp(),releasedBy:"automatic",releasedNetCents:netCents,updatedAt:FieldValue.serverTimestamp()},{merge:true});
     });
     return NextResponse.json({ok:true,orderId,netCents,currency,releasedBy:u.uid});
