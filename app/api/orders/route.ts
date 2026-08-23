@@ -29,7 +29,7 @@ export async function GET(req:NextRequest){
     }));
     const docs=[...buyer.docs,...seller.docs.filter(d=>!buyer.docs.some(b=>b.id===d.id))]
       .filter(d=>["paid","in-progress","crypto-received","delivered","disputed","completed-released","refunded"].includes(String(d.data()?.status)));
-    const orders=await Promise.all(docs.map(async doc=>{const data=doc.data();const listing=(await db.collection("listings").doc(String(data.listingId||"")).get()).data()||{};return {id:doc.id,...data,title:String(data.title||listing.title||"Service"),createdAt:dateValue(data.createdAt),paidAt:dateValue(data.paidAt),disputeDeadline:dateValue(data.disputeDeadline),isBuyer:String(data.buyerId)===user.uid};}));
+    const orders=await Promise.all(docs.map(async doc=>{const data=doc.data();const listing=data.listingId?(await db.collection("listings").doc(String(data.listingId)).get()).data()||{}:{};return {id:doc.id,...data,title:String(data.title||listing.title||"Service"),createdAt:dateValue(data.createdAt),paidAt:dateValue(data.paidAt),disputeDeadline:dateValue(data.disputeDeadline),isBuyer:String(data.buyerId)===user.uid};}));
     orders.sort((a,b)=>String(b.createdAt||"").localeCompare(String(a.createdAt||"")));
     return NextResponse.json({orders});
   }catch(error){const x=publicError(error);return NextResponse.json({error:x.message},{status:x.status});}
