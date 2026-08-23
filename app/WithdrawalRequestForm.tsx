@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { getClientAuth } from "@/lib/firebase-client";
 import PhoneVerification from "./PhoneVerification";
 
-const WITHDRAWAL_FEE_RATE = 0.05;
+const WITHDRAWAL_FEE_RATE = 0.10;
 const MIN_WITHDRAWAL_CENTS = 10000;
 const ADDRESS_PATTERN: Record<"USDT" | "USDC", RegExp> = { USDT: /^T[a-zA-Z0-9]{33}$/, USDC: /^0x[a-fA-F0-9]{40}$/ };
 const NETWORK_LABEL: Record<"USDT" | "USDC", string> = { USDT: "Tron (TRC20)", USDC: "BNB Smart Chain (BEP20)" };
@@ -132,7 +132,7 @@ export default function WithdrawalRequestForm({ onClose, defaultCurrency, onSubm
 
   if (loading) return <div className="listingBackdrop"><div className="listingModal" style={{ maxWidth: 420, textAlign: "center", padding: 50 }}>Loading withdrawal details…</div></div>;
 
-  if (submitted) return <div className="listingBackdrop"><div className="listingModal listingSuccess"><button className="listingClose" onClick={onClose}>×</button><span>✓</span><h2>Withdrawal requested</h2><p>Your request for ${(amountCents / 100).toFixed(2)} {currency} (net ${(netCents / 100).toFixed(2)} {currency} after the 5% fee) was submitted to the SaharaSnow administrator for manual payout to {mask(savedAddress[currency])}.</p><button className="primary" onClick={onClose}>Close</button></div></div>;
+  if (submitted) return <div className="listingBackdrop"><div className="listingModal listingSuccess"><button className="listingClose" onClick={onClose}>×</button><span>✓</span><h2>Withdrawal requested</h2><p>Your request for ${(amountCents / 100).toFixed(2)} {currency} (net ${(netCents / 100).toFixed(2)} {currency} after the 10% fee) was submitted to the SaharaSnow administrator for manual payout to {mask(savedAddress[currency])}.</p><button className="primary" onClick={onClose}>Close</button></div></div>;
 
   return <div className="listingBackdrop" onMouseDown={onClose}>
     <div className="listingModal" onMouseDown={e => e.stopPropagation()}>
@@ -151,7 +151,7 @@ export default function WithdrawalRequestForm({ onClose, defaultCurrency, onSubm
         </label>
         {amountCents > 0 && <div className="listingPreview" style={{ padding: 16 }}>
           <div style={{ display: "flex", justifyContent: "space-between" }}><span>Amount</span><b>${(amountCents / 100).toFixed(2)} {currency}</b></div>
-          <div style={{ display: "flex", justifyContent: "space-between" }}><span>Withdrawal fee (5%)</span><b>-${(feeCents / 100).toFixed(2)} {currency}</b></div>
+          <div style={{ display: "flex", justifyContent: "space-between" }}><span>Withdrawal fee (10%)</span><b>-${(feeCents / 100).toFixed(2)} {currency}</b></div>
           <div style={{ display: "flex", justifyContent: "space-between", borderTop: "1px solid #e1e2eb", marginTop: 8, paddingTop: 8 }}><span>You receive</span><b>${(netCents / 100).toFixed(2)} {currency}</b></div>
         </div>}
       </div>}
@@ -184,7 +184,7 @@ export default function WithdrawalRequestForm({ onClose, defaultCurrency, onSubm
         <h3>Confirm and submit</h3>
         <article className="listingPreview" style={{ padding: 20 }}>
           <div style={{ display: "flex", justifyContent: "space-between" }}><span>Amount</span><b>${(amountCents / 100).toFixed(2)} {currency}</b></div>
-          <div style={{ display: "flex", justifyContent: "space-between" }}><span>Withdrawal fee (5%)</span><b>-${(feeCents / 100).toFixed(2)} {currency}</b></div>
+          <div style={{ display: "flex", justifyContent: "space-between" }}><span>Withdrawal fee (10%)</span><b>-${(feeCents / 100).toFixed(2)} {currency}</b></div>
           <div style={{ display: "flex", justifyContent: "space-between", borderTop: "1px solid #e1e2eb", marginTop: 8, paddingTop: 8 }}><span>You receive</span><b>${(netCents / 100).toFixed(2)} {currency}</b></div>
           <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8 }}><span>Payout address</span><b>{mask(savedAddress[currency], 6)} ({NETWORK_LABEL[currency]})</b></div>
           <div style={{ display: "flex", justifyContent: "space-between" }}><span>Phone</span><b>{mask(phoneOnFile, 4)}</b></div>
