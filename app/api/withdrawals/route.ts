@@ -9,7 +9,7 @@ export const runtime="nodejs";
 export const dynamic="force-dynamic";
 
 const MIN_WITHDRAWAL_CENTS=10000;
-const WITHDRAWAL_FEE_RATE=0.05;
+const WITHDRAWAL_FEE_RATE=0.10;
 const MAX_REAUTH_AGE_SECONDS=600;
 const CURRENCY="USD" as const;
 const paidStatuses=new Set(["paid","completed","processed","paid-out","paid-manually"]);
@@ -143,7 +143,7 @@ export async function POST(req:NextRequest){
     await notifyUser({userId:user.uid,type:"withdrawal_requested",eventId:withdrawalId,title:"Withdrawal requested",message:`Your withdrawal request for ${(gross/100).toFixed(2)} ${currency} was submitted.`,link:"/?seller=1",email:true});
     await notifyAdminInApp({type:"withdrawal_requested",eventId:withdrawalId,title:"New withdrawal request",message:`A seller requested a manual ${currency} withdrawal of ${(gross/100).toFixed(2)} to ${payoutAddress} (${payoutNetwork}).`,link:"/admin"});
     const resend=new Resend(required("RESEND_API_KEY"));
-    const html=`<h1>SaharaSnow withdrawal request</h1><p>Request ${withdrawalId}</p><p>Currency: ${currency}</p><p>Gross: ${(gross/100).toFixed(2)} ${currency}</p><p>Fee (5%): ${(feeCents/100).toFixed(2)} ${currency}</p><p>Manual payout: ${(netCents/100).toFixed(2)} ${currency}</p><p>Payout address: ${payoutAddress} (${payoutNetwork})</p>`;
+    const html=`<h1>SaharaSnow withdrawal request</h1><p>Request ${withdrawalId}</p><p>Currency: ${currency}</p><p>Gross: ${(gross/100).toFixed(2)} ${currency}</p><p>Fee (10%): ${(feeCents/100).toFixed(2)} ${currency}</p><p>Manual payout: ${(netCents/100).toFixed(2)} ${currency}</p><p>Payout address: ${payoutAddress} (${payoutNetwork})</p>`;
     await resend.emails.send({from:required("EMAIL_FROM"),to:[required("ADMIN_EMAIL"),profile?.email].filter(Boolean),subject:"New SaharaSnow withdrawal request",html});
     return NextResponse.json({id:withdrawalId,currency,minWithdrawalCents:MIN_WITHDRAWAL_CENTS,grossCents:gross,feeCents,netCents,remainingAvailableCents});
   }catch(e){const x=publicError(e);return NextResponse.json({error:x.message},{status:x.status});}
