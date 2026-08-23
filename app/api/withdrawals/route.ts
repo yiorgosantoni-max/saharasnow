@@ -8,7 +8,7 @@ import { notifyAdminInApp, notifyUser } from "@/lib/notifications";
 export const runtime="nodejs";
 export const dynamic="force-dynamic";
 
-const MIN_WITHDRAWAL_CENTS=500;
+const MIN_WITHDRAWAL_CENTS=10000;
 const WITHDRAWAL_FEE_RATE=0.05;
 const MAX_REAUTH_AGE_SECONDS=600;
 const CURRENCY="USD" as const;
@@ -87,7 +87,7 @@ export async function POST(req:NextRequest){
     const currency=String(body?.currency||"").toUpperCase();
     if(currency!=="USDT"&&currency!=="USDC")throw new Error("Choose USDT or USDC to withdraw to.");
     if(!Number.isFinite(requested)||!Number.isInteger(requested)||requested<=0)throw new Error("Enter a valid withdrawal amount in whole cents");
-    if(requested<MIN_WITHDRAWAL_CENTS)throw new Error("The minimum withdrawal is $5.00");
+    if(requested<MIN_WITHDRAWAL_CENTS)throw new Error("The minimum withdrawal is $100.00");
 
     // Firebase Phone Auth verification happens entirely client-side, so a
     // recent auth_time on this ID token (refreshed right after the user
