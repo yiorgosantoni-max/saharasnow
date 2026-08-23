@@ -26,7 +26,9 @@ async function getSeller(id:string):Promise<PublicSeller|null>{
 
 export async function generateMetadata({params}:{params:Promise<Params>}):Promise<Metadata>{
   const {id}=await params;const seller=await getSeller(id);
-  return seller?{title:`${seller.name} | SaharaSnow seller`,description:`View ${seller.name}'s services on SaharaSnow.`}:{title:"Seller not found | SaharaSnow"};
+  if(!seller)return {title:"Seller not found | SaharaSnow"};
+  const title=`${seller.name} | SaharaSnow seller`,description=`View ${seller.name}'s services on SaharaSnow.`,image=seller.image||"/logo.png";
+  return {title,description,openGraph:{title,description,type:"website",images:[{url:image}]},twitter:{card:"summary",title,description,images:[image]}};
 }
 
 export default async function SellerPage({params}:{params:Promise<Params>}){
