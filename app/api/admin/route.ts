@@ -178,7 +178,9 @@ export async function PATCH(req: NextRequest) {
         if(value.sellerId){
           const sellerRef=db.collection("users").doc(String(value.sellerId));
           if(body.action==="reject"&&Number(value.grossCents)>0){
-            tx.set(sellerRef,{availableBalanceCents:FieldValue.increment(Number(value.grossCents)),pendingWithdrawalCents:0},{merge:true});
+            const withdrawalCurrency=String(value.currency||"USDT").toUpperCase();
+            const currencyBalanceField=withdrawalCurrency==="USDC"?"usdcBalanceCents":"usdtBalanceCents";
+            tx.set(sellerRef,{[currencyBalanceField]:FieldValue.increment(Number(value.grossCents)),availableBalanceCents:FieldValue.increment(Number(value.grossCents)),pendingWithdrawalCents:0},{merge:true});
           }else if(body.action==="paid"){
             tx.set(sellerRef,{pendingWithdrawalCents:0,withdrawnCents:FieldValue.increment(Number(value.netCents||0))},{merge:true});
           }
