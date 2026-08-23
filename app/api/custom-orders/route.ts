@@ -23,7 +23,7 @@ export async function GET(req:NextRequest){
     const offers=[...sent.docs,...received.docs].filter(d=>{if(seen.has(d.id))return false;seen.add(d.id);return true}).map(d=>{
       const data=d.data()||{};
       const createdAt=data.createdAt&&typeof data.createdAt==="object"&&"toDate" in data.createdAt?(data.createdAt as {toDate:()=>Date}).toDate().toISOString():null;
-      return {id:d.id,senderId:String(data.senderId||""),recipientId:String(data.recipientId||""),title:String(data.title||""),details:String(data.details||""),price:Number(data.price||0),currency:data.currency==="USDC"?"USDC":"USDT",status:String(data.status||"sent"),createdAt};
+      return {id:d.id,senderId:String(data.senderId||""),recipientId:String(data.recipientId||""),title:String(data.title||""),details:String(data.details||""),price:Number(data.price||0),currency:data.currency==="USDC"?"USDC":"USDT",status:String(data.status||"sent"),createdAt,attachments:Array.isArray(data.attachments)?data.attachments:[]};
     }).sort((a,b)=>(b.createdAt||"").localeCompare(a.createdAt||""));
     return NextResponse.json({offers});
   }catch(e){const x=publicError(e);return NextResponse.json({error:x.message},{status:x.status});}
