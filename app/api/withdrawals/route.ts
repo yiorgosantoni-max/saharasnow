@@ -1,6 +1,5 @@
 import { NextRequest,NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
-import { authenticator } from "otplib";
 import { Resend } from "resend";
 import { db } from "@/lib/firebase-admin";
 import { publicError,required,userFromRequest } from "@/lib/server";
@@ -11,6 +10,7 @@ export const dynamic="force-dynamic";
 
 const MIN_WITHDRAWAL_CENTS=500;
 const WITHDRAWAL_FEE_RATE=0.05;
+const MAX_REAUTH_AGE_SECONDS=600;
 const CURRENCY="USD" as const;
 const paidStatuses=new Set(["paid","completed","processed","paid-out","paid-manually"]);
 const pendingStatuses=new Set(["pending","pending-manual-payment","processing"]);
@@ -62,7 +62,7 @@ async function balanceForSeller(uid:string){
 export async function GET(req:NextRequest){
   try{
     const user=await userFromRequest(req);
-    const {available,usdtAvailable,usdcAvailable}=await balanceForSeller(user.uid);
+    const {available,usdtAvailable,usdcAvailable,profile}=await balanceForSeller(user.uid);
     const snap=await db.collection("withdrawals").where("sellerId","==",user.uid).limit(200).get();
     return NextResponse.json({
       currency:CURRENCY,
@@ -70,6 +70,10 @@ export async function GET(req:NextRequest){
       availableCents:available,
       usdtAvailableCents:usdtAvailable,
       usdcAvailableCents:usdcAvailable,
+      phoneVerified:Boolean(profile.phoneVerified),
+      phoneNumber:String(profile.phoneNumber||""),
+      usdtWithdrawAddress:String(profile.usdtWithdrawAddress||""),
+      usdcWithdrawAddress:String(profile.usdcWithdrawAddress||""),
       withdrawals:snap.docs.map(d=>({id:d.id,...d.data()}))
     });
   }catch(e){const x=publicError(e);return NextResponse.json({error:x.message},{status:x.status});}
@@ -79,18 +83,31 @@ export async function POST(req:NextRequest){
   try{
     const user=await userFromRequest(req);
     const body=await req.json();
-    const totp=String(body?.totp||"");
     const requested=Number(body?.amountCents);
     const currency=String(body?.currency||"").toUpperCase();
     if(currency!=="USDT"&&currency!=="USDC")throw new Error("Choose USDT or USDC to withdraw to.");
     if(!Number.isFinite(requested)||!Number.isInteger(requested)||requested<=0)throw new Error("Enter a valid withdrawal amount in whole cents");
     if(requested<MIN_WITHDRAWAL_CENTS)throw new Error("The minimum withdrawal is $5.00");
 
-    let gross=0;let withdrawalId="";let feeCents=0;let netCents=0;let remainingAvailableCents=0;
+    // Firebase Phone Auth verification happens entirely client-side, so a
+    // recent auth_time on this ID token (refreshed right after the user
+    // completes an SMS code) is the server-side proof that verification just
+    // happened - there's no separate OTP code to check here.
+    const authTime=Number(user.auth_time||0);
+    if(!authTime||Date.now()/1000-authTime>MAX_REAUTH_AGE_SECONDS)throw new Error("Please verify your phone with a fresh SMS code before requesting a withdrawal.");
+
+    let gross=0;let withdrawalId="";let feeCents=0;let netCents=0;let remainingAvailableCents=0;let payoutAddress="";let payoutNetwork="";
     await db.runTransaction(async tx=>{
       const userRef=db.collection("users").doc(user.uid);
       const profile=(await tx.get(userRef)).data();
-      if(!profile?.totpEnabled||!profile?.totpSecret||!authenticator.check(totp,profile.totpSecret))throw new Error("Google Authenticator verification is required before requesting a withdrawal");
+      if(!profile?.phoneVerified||!profile?.phoneNumber)throw new Error("Verify your phone number with an SMS code before requesting a withdrawal.");
+      if(String(profile.phoneNumber)!==String(user.phone_number||""))throw new Error("Please verify your phone with a fresh SMS code before requesting a withdrawal.");
+
+      const addressField=currency==="USDC"?"usdcWithdrawAddress":"usdtWithdrawAddress";
+      const networkField=currency==="USDC"?"usdcWithdrawAddressNetwork":"usdtWithdrawAddressNetwork";
+      payoutAddress=String(profile[addressField]||"");
+      payoutNetwork=String(profile[networkField]||"");
+      if(!payoutAddress)throw new Error(`Set and confirm your ${currency} withdrawal address before requesting a withdrawal.`);
 
       // Recalculate inside the transaction from the user's stored balance and
       // active requests. This prevents a rejected request from leaving the UI
@@ -113,7 +130,7 @@ export async function POST(req:NextRequest){
       remainingAvailableCents=Math.max(0,available-gross);
       const ref=db.collection("withdrawals").doc();
       withdrawalId=ref.id;
-      tx.create(ref,{sellerId:user.uid,grossCents:gross,feeCents,netCents,status:"pending-manual-payment",currency,feeRate:WITHDRAWAL_FEE_RATE,requestedAt:new Date()});
+      tx.create(ref,{sellerId:user.uid,grossCents:gross,feeCents,netCents,status:"pending-manual-payment",currency,feeRate:WITHDRAWAL_FEE_RATE,payoutAddress,payoutNetwork,requestedAt:new Date()});
       tx.set(userRef,{
         [balanceField]:FieldValue.increment(-gross),
         availableBalanceCents:FieldValue.increment(-gross),
@@ -124,9 +141,9 @@ export async function POST(req:NextRequest){
 
     const profile=(await db.collection("users").doc(user.uid).get()).data();
     await notifyUser({userId:user.uid,type:"withdrawal_requested",eventId:withdrawalId,title:"Withdrawal requested",message:`Your withdrawal request for ${(gross/100).toFixed(2)} ${currency} was submitted.`,link:"/?seller=1",email:true});
-    await notifyAdminInApp({type:"withdrawal_requested",eventId:withdrawalId,title:"New withdrawal request",message:`A seller requested a manual ${currency} withdrawal of ${(gross/100).toFixed(2)}.`,link:"/admin"});
+    await notifyAdminInApp({type:"withdrawal_requested",eventId:withdrawalId,title:"New withdrawal request",message:`A seller requested a manual ${currency} withdrawal of ${(gross/100).toFixed(2)} to ${payoutAddress} (${payoutNetwork}).`,link:"/admin"});
     const resend=new Resend(required("RESEND_API_KEY"));
-    const html=`<h1>SaharaSnow withdrawal request</h1><p>Request ${withdrawalId}</p><p>Currency: ${currency}</p><p>Gross: ${(gross/100).toFixed(2)} ${currency}</p><p>Fee (5%): ${(feeCents/100).toFixed(2)} ${currency}</p><p>Manual payout: ${(netCents/100).toFixed(2)} ${currency}</p>`;
+    const html=`<h1>SaharaSnow withdrawal request</h1><p>Request ${withdrawalId}</p><p>Currency: ${currency}</p><p>Gross: ${(gross/100).toFixed(2)} ${currency}</p><p>Fee (5%): ${(feeCents/100).toFixed(2)} ${currency}</p><p>Manual payout: ${(netCents/100).toFixed(2)} ${currency}</p><p>Payout address: ${payoutAddress} (${payoutNetwork})</p>`;
     await resend.emails.send({from:required("EMAIL_FROM"),to:[required("ADMIN_EMAIL"),profile?.email].filter(Boolean),subject:"New SaharaSnow withdrawal request",html});
     return NextResponse.json({id:withdrawalId,currency,minWithdrawalCents:MIN_WITHDRAWAL_CENTS,grossCents:gross,feeCents,netCents,remainingAvailableCents});
   }catch(e){const x=publicError(e);return NextResponse.json({error:x.message},{status:x.status});}
