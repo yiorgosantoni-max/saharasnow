@@ -1,11 +1,10 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
-import { PhoneAuthProvider, RecaptchaVerifier, linkWithCredential, reauthenticateWithCredential } from "firebase/auth";
+import { useEffect, useState } from "react";
 import { getClientAuth } from "@/lib/firebase-client";
+import PhoneVerification from "./PhoneVerification";
 
 const WITHDRAWAL_FEE_RATE = 0.05;
 const MIN_WITHDRAWAL_CENTS = 500;
-const PHONE_PATTERN = /^\+[1-9]\d{7,14}$/;
 const ADDRESS_PATTERN: Record<"USDT" | "USDC", RegExp> = { USDT: /^T[a-zA-Z0-9]{33}$/, USDC: /^0x[a-fA-F0-9]{40}$/ };
 const NETWORK_LABEL: Record<"USDT" | "USDC", string> = { USDT: "Tron (TRC20)", USDC: "BNB Smart Chain (BEP20)" };
 
@@ -33,13 +32,7 @@ export default function WithdrawalRequestForm({ onClose, defaultCurrency, onSubm
 
   const [phoneVerified, setPhoneVerified] = useState(false);
   const [phoneOnFile, setPhoneOnFile] = useState("");
-  const [phoneInput, setPhoneInput] = useState("");
-  const [codeSent, setCodeSent] = useState(false);
-  const [code, setCode] = useState("");
   const [justVerified, setJustVerified] = useState(false);
-  const verificationIdRef = useRef("");
-  const recaptchaRef = useRef<RecaptchaVerifier | null>(null);
-  const recaptchaContainerRef = useRef<HTMLDivElement | null>(null);
 
   const [confirmAccurate, setConfirmAccurate] = useState(false);
 
@@ -56,7 +49,6 @@ export default function WithdrawalRequestForm({ onClose, defaultCurrency, onSubm
         setUsdcAvailableCents(Number(data.usdcAvailableCents || 0));
         setPhoneVerified(Boolean(data.phoneVerified));
         setPhoneOnFile(String(data.phoneNumber || ""));
-        setPhoneInput(String(data.phoneNumber || ""));
         setSavedAddress({ USDT: String(data.usdtWithdrawAddress || ""), USDC: String(data.usdcWithdrawAddress || "") });
       } catch (error) {
         setNotice(error instanceof Error ? error.message : "Unable to load withdrawal details.");
@@ -64,7 +56,6 @@ export default function WithdrawalRequestForm({ onClose, defaultCurrency, onSubm
         setLoading(false);
       }
     })();
-    return () => { recaptchaRef.current?.clear(); recaptchaRef.current = null; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -119,67 +110,6 @@ export default function WithdrawalRequestForm({ onClose, defaultCurrency, onSubm
     }
   }
 
-  async function sendCode() {
-    setNotice("");
-    const phone = phoneInput.trim();
-    if (!PHONE_PATTERN.test(phone)) { setNotice("Enter your phone number in international format, e.g. +15551234567."); return; }
-    setBusy(true);
-    try {
-      const auth = getClientAuth();
-      if (!auth.currentUser) throw new Error("Please sign in again.");
-      if (!recaptchaRef.current && recaptchaContainerRef.current) {
-        recaptchaRef.current = new RecaptchaVerifier(auth, recaptchaContainerRef.current, { size: "invisible" });
-      }
-      if (!recaptchaRef.current) throw new Error("Unable to prepare verification. Please try again.");
-      const provider = new PhoneAuthProvider(auth);
-      verificationIdRef.current = await provider.verifyPhoneNumber(phone, recaptchaRef.current);
-      setCodeSent(true);
-      setNotice(`Code sent to ${phone}.`);
-    } catch (error) {
-      recaptchaRef.current?.clear();
-      recaptchaRef.current = null;
-      setNotice(error instanceof Error ? error.message : "Unable to send verification code.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function verifyCode() {
-    setNotice("");
-    if (!/^\d{6}$/.test(code.trim())) { setNotice("Enter the 6-digit code."); return; }
-    setBusy(true);
-    try {
-      const auth = getClientAuth();
-      if (!auth.currentUser) throw new Error("Please sign in again.");
-      const credential = PhoneAuthProvider.credential(verificationIdRef.current, code.trim());
-      if (phoneVerified && phoneOnFile === phoneInput.trim()) {
-        await reauthenticateWithCredential(auth.currentUser, credential);
-      } else {
-        try {
-          await linkWithCredential(auth.currentUser, credential);
-        } catch (linkError) {
-          if (linkError instanceof Error && linkError.message.includes("auth/provider-already-linked")) {
-            await reauthenticateWithCredential(auth.currentUser, credential);
-          } else {
-            throw linkError;
-          }
-        }
-      }
-      const token = await auth.currentUser.getIdToken(true);
-      const res = await fetch("/api/profile/phone", { method: "POST", headers: { authorization: `Bearer ${token}` } });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Unable to confirm phone verification.");
-      setPhoneVerified(true);
-      setPhoneOnFile(data.phoneNumber || phoneInput.trim());
-      setJustVerified(true);
-      setNotice("Phone number verified.");
-    } catch (error) {
-      setNotice(error instanceof Error ? error.message : "Unable to verify the code. Please try again.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
   async function submit() {
     setNotice("");
     if (!confirmAccurate) { setNotice("Confirm the details above before submitting."); return; }
@@ -205,7 +135,6 @@ export default function WithdrawalRequestForm({ onClose, defaultCurrency, onSubm
   if (submitted) return <div className="listingBackdrop"><div className="listingModal listingSuccess"><button className="listingClose" onClick={onClose}>×</button><span>✓</span><h2>Withdrawal requested</h2><p>Your request for ${(amountCents / 100).toFixed(2)} {currency} (net ${(netCents / 100).toFixed(2)} {currency} after the 5% fee) was submitted to the SaharaSnow administrator for manual payout to {mask(savedAddress[currency])}.</p><button className="primary" onClick={onClose}>Close</button></div></div>;
 
   return <div className="listingBackdrop" onMouseDown={onClose}>
-    <div ref={recaptchaContainerRef} />
     <div className="listingModal" onMouseDown={e => e.stopPropagation()}>
       <button type="button" className="listingClose" onClick={onClose}>×</button>
       <div className="listingHeading"><div><small>SELLER WITHDRAWAL</small><h2>Request a withdrawal</h2></div><b>Step {step} of 4</b></div>
@@ -248,17 +177,7 @@ export default function WithdrawalRequestForm({ onClose, defaultCurrency, onSubm
       {step === 3 && <div className="listingStep">
         <h3>Verify your phone</h3>
         <p>For security, every withdrawal requires a fresh SMS verification code.</p>
-        {!phoneVerified && <label>Phone number <small>Include your country code, e.g. +1 555 123 4567</small>
-          <input value={phoneInput} onChange={e => setPhoneInput(e.target.value)} placeholder="+15551234567" disabled={codeSent} />
-        </label>}
-        {phoneVerified && <p><b>{mask(phoneOnFile, 4)}</b></p>}
-        {!codeSent ? <button type="button" className="primary" disabled={busy} onClick={sendCode}>{busy ? "Sending…" : "Send SMS code"}</button> : <>
-          <label>6-digit code<input value={code} onChange={e => setCode(e.target.value)} maxLength={6} placeholder="123456" /></label>
-          <div className="listingActions" style={{ marginTop: 0 }}>
-            <button type="button" onClick={() => { setCodeSent(false); setCode(""); }}>Resend code</button>
-            <button type="button" className="primary" disabled={busy || justVerified} onClick={verifyCode}>{busy ? "Verifying…" : justVerified ? "Verified ✓" : "Verify code"}</button>
-          </div>
-        </>}
+        {justVerified ? <p>✓ Verified: <b>{mask(phoneOnFile, 4)}</b></p> : <PhoneVerification phoneVerified={phoneVerified} phoneOnFile={phoneOnFile} onVerified={number => { setPhoneVerified(true); setPhoneOnFile(number); setJustVerified(true); }} />}
       </div>}
 
       {step === 4 && <div className="listingStep">
