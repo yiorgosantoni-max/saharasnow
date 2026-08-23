@@ -177,7 +177,7 @@ export default function WithdrawalRequestForm({ onClose, defaultCurrency, onSubm
       {step === 3 && <div className="listingStep">
         <h3>Verify your phone</h3>
         <p>For security, every withdrawal requires a fresh SMS verification code.</p>
-        {justVerified ? <p>✓ Verified: <b>{mask(phoneOnFile, 4)}</b></p> : <PhoneVerification phoneVerified={phoneVerified} phoneOnFile={phoneOnFile} onVerified={number => { setPhoneVerified(true); setPhoneOnFile(number); setJustVerified(true); }} />}
+        {justVerified ? <p>✓ Verified: <b>{mask(phoneOnFile, 4)}</b></p> : <PhoneVerification phoneVerified={phoneVerified} phoneOnFile={phoneOnFile} allowSetNumber={false} onVerified={number => { setPhoneVerified(true); setPhoneOnFile(number); setJustVerified(true); }} />}
       </div>}
 
       {step === 4 && <div className="listingStep">
