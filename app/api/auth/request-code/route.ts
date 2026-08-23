@@ -28,7 +28,6 @@ export async function POST(req: NextRequest) {
     if (purpose === "login" && existingUser) {
       const profile = (await db.collection("users").doc(existingUser.uid).get()).data() || {};
       if (existingUser.disabled || profile.accountStatus === "suspended") {
-        // Do not issue or email a login code to suspended users.
         return NextResponse.json({error: "This account is suspended. Login is currently disabled."}, {status: 403});
       }
     }
@@ -49,11 +48,12 @@ export async function POST(req: NextRequest) {
     });
 
     const resend = new Resend(required("RESEND_API_KEY"));
+    const appUrl = required("APP_URL");
     const result = await resend.emails.send({
       from: required("EMAIL_FROM"),
       to: email,
       subject: `${code} is your SaharaSnow sign-in code`,
-      html: `<div style="font-family:Arial,sans-serif;max-width:520px;margin:auto"><h1 style="color:#075ee8">SaharaSnow</h1><p>Use this one-time code to sign in:</p><p style="font-size:34px;font-weight:700;letter-spacing:8px">${code}</p><p>This code expires in 10 minutes. If you did not request it, ignore this email.</p></div>`
+      html: `<div style="font-family:Arial,sans-serif;max-width:520px;margin:auto"><img src="${appUrl}/logo.png" width="70" height="70" alt="SaharaSnow" style="object-fit:contain"><h1 style="color:#075ee8">SaharaSnow</h1><p>Use this one-time code to sign in:</p><p style="font-size:34px;font-weight:700;letter-spacing:8px">${code}</p><p>This code expires in 10 minutes. If you did not request it, ignore this email.</p></div>`
     });
 
     if (result.error) {
