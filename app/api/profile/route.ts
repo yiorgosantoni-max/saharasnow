@@ -3,6 +3,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/firebase-admin";
 import { publicError, releaseEligibleSellerOrders, userFromRequest } from "@/lib/server";
+import { notifyAdmin } from "@/lib/admin-notifications";
+import { notifyUser } from "@/lib/notifications";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -45,6 +47,7 @@ export async function PATCH(req: NextRequest) {
     const body = profileSchema.parse(await req.json());
     const userRef = db.collection("users").doc(user.uid);
     const nextUsername = body.username || "";
+    let kycRevoked = false;
     await db.runTransaction(async (tx) => {
       if (nextUsername) {
         // Check the live username field on every account rather than a
@@ -55,9 +58,21 @@ export async function PATCH(req: NextRequest) {
         const conflict = conflictSnap.docs[0];
         if (conflict && conflict.id !== user.uid) throw new Error("That username is already taken.");
       }
-      tx.set(userRef, {...body,email:user.email,updatedAt:FieldValue.serverTimestamp()}, {merge:true});
+      const existing = (await tx.get(userRef)).data() || {};
+      const identityChanged = String(existing.firstName||"") !== body.firstName || String(existing.lastName||"") !== body.lastName || String(existing.country||"") !== body.country;
+      const writeBody: Record<string, unknown> = {...body,email:user.email,updatedAt:FieldValue.serverTimestamp()};
+      if (identityChanged && existing.kycStatus === "approved") {
+        writeBody.kycStatus = "pending";
+        writeBody.kycReviewNote = "Automatically returned to review after the name or country on this account changed.";
+        kycRevoked = true;
+      }
+      tx.set(userRef, writeBody, {merge:true});
     });
-    return NextResponse.json({ok:true});
+    if (kycRevoked) {
+      await notifyAdmin({subject:`KYC re-review required: ${user.email||user.uid}`,heading:"Seller changed verified profile details",message:"A previously KYC-approved seller changed their name or country. Their KYC status was automatically reverted to pending until this is reviewed.",details:{Email:user.email||"Not available","User ID":user.uid,Status:"Pending review"},actionLabel:"Review account",actionPath:"/admin"});
+      await notifyUser({userId:user.uid,type:"kyc_revoked_edit",eventId:`${user.uid}_kyc_revoked_${Date.now()}`,title:"KYC verification paused",message:"Changing your name or country requires your identity to be re-verified. Your verified badge is temporarily removed until an administrator reviews the change.",link:"/?kyc=1",email:true});
+    }
+    return NextResponse.json({ok:true,kycRevoked});
   } catch (error) {
     const result = publicError(error);
     return NextResponse.json({error:result.message},{status:result.status});
