@@ -44,7 +44,7 @@ export async function POST(req:NextRequest){
 
       // Stage 2 -> release: the one-day clearance has ended. Release the seller's full
       // net earnings now, in the order's own currency (USDT/USDC), with no fee taken here.
-      // The 5% withdrawal fee is only ever deducted later, when the seller actually
+      // The 10% withdrawal fee is only ever deducted later, when the seller actually
       // requests a withdrawal (see app/api/withdrawals/route.ts) — never at release time.
       const end=o.clearanceEndsAt?.toDate?.()||new Date(o.clearanceEndsAt||0);
       if(!end.getTime()||end.getTime()>now||o.releasedAt||o.releasedEarly)continue;
@@ -69,7 +69,7 @@ export async function POST(req:NextRequest){
       });
       if(sellerId&&netCents>0){
         const netAmount=(netCents/100).toFixed(2);
-        await notifyUser({userId:sellerId,type:"earnings_released",eventId:`${d.id}_automatic_release`,title:"One-day clearance completed",message:`Your ${netAmount} ${currency} was automatically released to your available balance. The 5% fee is only deducted when you request a withdrawal.`,link:"/?seller=1",email:true});
+        await notifyUser({userId:sellerId,type:"earnings_released",eventId:`${d.id}_automatic_release`,title:"One-day clearance completed",message:`Your ${netAmount} ${currency} was automatically released to your available balance. The 10% fee is only deducted when you request a withdrawal.`,link:"/?seller=1",email:true});
         released++;
       }
     }
