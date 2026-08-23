@@ -17,10 +17,10 @@ export async function GET(req: NextRequest) {
 
     // These are service-level stats, not seller-wide stats, so the badge and rating on
     // every card describe the actual service being viewed. orderCount counts every order
-    // that actually got placed (payment confirmed), not just ones that finished clearance -
-    // otherwise a brand-new order stays invisible for days while it works through the
-    // dispute/clearance pipeline.
-    const unplacedStatuses = ["awaiting-crypto-payment", "payment-submitted"];
+    // the buyer has actually submitted payment for (transaction hash sent), not just ones
+    // that finished the full approval/clearance pipeline - only a still-empty checkout that
+    // never got a payment reference is excluded.
+    const unplacedStatuses = ["awaiting-crypto-payment"];
     const [ordersSnap, reviewsSnap] = await Promise.all([
       db.collection("orders").where("listingId", "==", listingId).get(),
       db.collection("reviews").where("listingId", "==", listingId).get(),
