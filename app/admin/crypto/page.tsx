@@ -122,7 +122,7 @@ export default function AdminCrypto(){
       <p>Submitted: {when(x.submittedAt)}</p>
       {approved&&<p><b>✓ Approved{released?" · ✓ Earnings released early":""}</b></p>}
       {x.status==="rejected"&&<p><b>✕ Rejected</b></p>}
-      {releaseable&&<p style={{fontWeight:700}}>⏳ Approved — seller earnings are in the three-day clearance period.</p>}
+      {releaseable&&<p style={{fontWeight:700}}>⏳ Approved — seller earnings are in the one-day clearance period.</p>}
       <button disabled={!isPending||!!busy} onClick={()=>void act(x.id,"approve")} style={{marginRight:8,opacity:isPending?1:.5}}>✓ Verify on BingX &amp; approve</button>
       <button disabled={!isPending||!!busy} onClick={()=>void act(x.id,"reject")} style={{marginRight:8,opacity:isPending?1:.5}}>✕ Reject</button>
       {isPending&&<button disabled={!!busy} onClick={()=>{if(confirm("DANGER APPROVE bypasses BingX verification entirely and credits this payment immediately. Only use this if you have independently confirmed the funds arrived. Continue?"))void act(x.id,"forceApprove")}} style={{...dangerStyle,marginRight:8}}>🚨 DANGER APPROVE (skip BingX)</button>}
@@ -158,8 +158,8 @@ export default function AdminCrypto(){
       {lastAutoVerify&&<small style={{marginLeft:10}}>Last check: {lastAutoVerify.toLocaleTimeString()}</small>}
     </section>
     <section style={{padding:16,border:"1px solid #ddd",borderRadius:14,marginBottom:24}}>
-      <b>⏱ Automatic three-day clearance</b>
-      <p>After delivery, buyers have a review window equal to the package's delivery time (e.g. 1-day delivery = 24 hours, 30-day delivery = 30 days) to open a dispute or request a revision. Once that window passes with no dispute, the order enters the standard three-day clearance period; when that ends, the full USDT/USDC seller earnings are released to the seller's available balance — no fee is taken here. The 5% withdrawal fee is only ever deducted later, when the seller actually requests a withdrawal.</p>
+      <b>⏱ Automatic one-day clearance</b>
+      <p>After delivery, buyers have a fixed three-day window to open a dispute or request a revision. Once that window passes with no dispute, the order enters a one-day clearance period; when that ends, the full USDT/USDC seller earnings are released to the seller's available balance — no fee is taken here. The 5% withdrawal fee is only ever deducted later, when the seller actually requests a withdrawal.</p>
       <label>Check every <input type="number" min={5} max={300} value={auto} onChange={ev=>setAuto(Math.max(5,Number(ev.target.value)||10))} style={{width:70,margin:"0 6px"}}/> seconds.</label>
       <button onClick={()=>void runClearance()} style={{marginLeft:10}}>Run now</button>
       {lastRun&&<small style={{marginLeft:10}}>Last check: {lastRun.toLocaleTimeString()}</small>}
@@ -171,7 +171,7 @@ export default function AdminCrypto(){
     {listingHistory.length?listingHistory.map(x=>listingCard(x,false)):<p>No processed listing credit payments yet.</p>}
     <h2>🛒 Pending service payments ({pending.length})</h2>
     {pending.length?pending.map(card):<p>No pending service payments.</p>}
-    <h2>⚡ Approved — awaiting three-day clearance ({clearance.length})</h2>
+    <h2>⚡ Approved — awaiting one-day clearance ({clearance.length})</h2>
     {clearance.length?clearance.map(card):<p>No approved service payments awaiting clearance.</p>}
     <h2>📜 Crypto transaction history ({history.length})</h2>
     {history.length?history.map(card):<p>No completed or rejected crypto transactions yet.</p>}
