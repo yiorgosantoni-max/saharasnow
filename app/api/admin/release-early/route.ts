@@ -35,7 +35,7 @@ export async function POST(req:NextRequest){
       if(cryptoPaymentId)tx.set(db.collection("cryptoPayments").doc(cryptoPaymentId),{releasedEarly:true,releasedAt:FieldValue.serverTimestamp(),releasedBy:adminUser.uid},{merge:true});
     });
     const netAmount=(netCents/100).toFixed(2);
-    await notifyUser({userId:sellerId,type:"earnings_released_early",eventId:orderId,title:"Earnings released early",message:`An administrator released your earnings of ${netAmount} ${currency} early to your available balance. The 5% fee is only deducted when you request a withdrawal.`,link:"/?seller=1",email:true});
+    await notifyUser({userId:sellerId,type:"earnings_released_early",eventId:orderId,title:"Earnings released early",message:`An administrator released your earnings of ${netAmount} ${currency} early to your available balance. The 10% fee is only deducted when you request a withdrawal.`,link:"/?seller=1",email:true});
     return NextResponse.json({ok:true,orderId,netCents,currency});
   }catch(e){
     const x=e instanceof z.ZodError?{message:"Invalid release request.",status:400}:publicError(e);
