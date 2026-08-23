@@ -14,7 +14,7 @@ const ADMIN_EMAIL = (process.env.SUPER_ADMIN_EMAIL || "yiorgosantoni@gmail.com")
 const actionSchema = z.object({
   resource: z.enum(["kyc", "listing", "withdrawal", "order", "ticket", "user", "users", "report", "auditLogs"]),
   id: z.string().min(1).max(200),
-  action: z.enum(["approve", "reject", "reupload", "delete", "paid", "release", "refund", "resolve", "close", "suspend", "restore", "clearAll", "deleteSelected", "forceLogoutAll", "deleteSelectedOrders", "deleteSelectedListings", "resetPhone", "restoreKyc"]),
+  action: z.enum(["approve", "reject", "reupload", "delete", "paid", "release", "refund", "resolve", "requestInfo", "close", "suspend", "restore", "clearAll", "deleteSelected", "forceLogoutAll", "deleteSelectedOrders", "deleteSelectedListings", "resetPhone", "restoreKyc"]),
   ids: z.array(z.string().min(1).max(200)).max(200).optional(),
   note: z.string().trim().max(500).optional(),
   sellerAmount: z.number().min(0).max(1000000).optional(),
@@ -141,7 +141,7 @@ export async function PATCH(req: NextRequest) {
       await notifyUser({userId:uid,type:`kyc_${status}`,eventId:`${body.id}_${status}`,title,message,link:"/?kyc=1",email:true});
       if(body.action==="reupload"&&current.email){
         const appUrl=required("APP_URL"),reason=String(body.note||"").replace(/[&<>"']/g,character=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[character]||character));
-        const result=await new Resend(required("RESEND_API_KEY")).emails.send({from:required("EMAIL_FROM"),to:String(current.email),subject:"SaharaSnow requires updated KYC documents",html:`<div style="font-family:Arial,sans-serif;color:#17154a;max-width:620px;margin:auto;padding:24px"><img src="${appUrl}/logo.png" width="70" height="70" style="object-fit:contain" alt="SaharaSnow"><h1>Please upload your KYC documents again</h1><p>The administrator requires newer or clearer identity documents before your KYC can be approved.</p><div style="background:#f3f5fb;border-left:4px solid #ff6f61;padding:14px;margin:20px 0"><b>Administrator's reason:</b><br>${reason}</div><p><a href="${appUrl}/?kyc=reupload" style="display:inline-block;background:#075ee8;color:#fff;text-decoration:none;padding:12px 17px;border-radius:8px;font-weight:bold">Reupload KYC documents</a></p></div>`});
+        const result=await new Resend(required("RESEND_API_KEY")).emails.send({from:required("EMAIL_FROM"),to:String(current.email),subject:"SaharaSnow requires updated KYC documents",html:`<div style="font-family:Arial,sans-serif;color:#17154a;max-width:620px;margin:auto;padding:24px"><img src="${appUrl}/logo.png" width="70" height="70" style="object-fit:contain" alt="SaharaSnow"><h1>Please upload your KYC documents again</h1><p>The administrator requires newer or clearer identity documents before your KYC can be approved.</p><div style="background:#f3f5fb;border-left:4px solid #ff6f61;padding:14px;margin:20px 0"><b>Administrator’s reason:</b><br>${reason}</div><p><a href="${appUrl}/?kyc=reupload" style="display:inline-block;background:#075ee8;color:#fff;text-decoration:none;padding:12px 17px;border-radius:8px;font-weight:bold">Reupload KYC documents</a></p></div>`});
         if(result.error) console.error("KYC reupload email failed", result.error.message);
       }
     } else if (body.resource === "listing") {
@@ -149,12 +149,12 @@ export async function PATCH(req: NextRequest) {
       if(body.action==="approve"&&current.status==="awaiting-listing-fee")throw new Error("The seller must complete the listing-credit payment before this listing can be published.");
       if(body.action === "delete") {
         await ref.delete();
-        if(current.sellerId) await notifyUser({userId:String(current.sellerId),type:"listing_deleted",eventId:body.id,title:"Listing removed",message:`Your listing "${String(current.title||"Service") }" was removed by the administrator${body.note ? `: ${body.note}` : "."}`,link:"/?services=1",email:true});
+        if(current.sellerId) await notifyUser({userId:String(current.sellerId),type:"listing_deleted",eventId:body.id,title:"Listing removed",message:`Your listing “${String(current.title||"Service") }” was removed by the administrator${body.note ? `: ${body.note}` : "."}`,link:"/?services=1",email:true});
       } else {
         const status = body.action === "approve" ? "active" : "rejected";
         changes = {...changes,status,moderationNote:body.note||"",moderatedBy:actingAdmin.email};
         await ref.set(changes,{merge:true});
-        if(current.sellerId) await notifyUser({userId:String(current.sellerId),type:`listing_${status}`,eventId:body.id,title:status === "active" ? "Listing approved" : "Listing rejected",message:status === "active" ? `Your listing "${String(current.title||"Service") }" is now published.` : `Your listing "${String(current.title||"Service") }" was rejected${body.note ? `: ${body.note}` : "."}`,link:status === "active" ? `/service/${String(current.subcategory||current.category||"service").toLowerCase().replace(/[^a-z0-9]+/g,"-")}/${body.id}` : "/?services=1",email:true});
+        if(current.sellerId) await notifyUser({userId:String(current.sellerId),type:`listing_${status}`,eventId:body.id,title:status === "active" ? "Listing approved" : "Listing rejected",message:status === "active" ? `Your listing “${String(current.title||"Service") }” is now published.` : `Your listing “${String(current.title||"Service") }” was rejected${body.note ? `: ${body.note}` : "."}`,link:status === "active" ? `/service/${String(current.subcategory||current.category||"service").toLowerCase().replace(/[^a-z0-9]+/g,"-")}/${body.id}` : "/?services=1",email:true});
         if(body.action === "approve" && current.sellerId) {
           const seller = (await db.collection("users").doc(String(current.sellerId)).get()).data() || {};
           if (seller.email) {
@@ -187,10 +187,19 @@ export async function PATCH(req: NextRequest) {
       writtenInTransaction = true;
       if(current.sellerId) await notifyUser({userId:String(current.sellerId),type:`withdrawal_${body.action}`,eventId:body.id,title:body.action === "paid" ? "Withdrawal paid" : "Withdrawal rejected",message:body.action === "paid" ? `Your withdrawal of $${(Number(current.netCents||0)/100).toFixed(2)} was marked as paid by the administrator.` : `Your withdrawal was rejected${body.note ? `: ${body.note}` : ". The balance has been restored and is available for a new withdrawal request."}`,link:"/?seller=1",email:true});
     } else if (body.resource === "order") {
-      if (!['release','refund','delete','resolve'].includes(body.action)) throw new Error("INVALID_ACTION");
+      if (!['release','refund','delete','resolve','requestInfo'].includes(body.action)) throw new Error("INVALID_ACTION");
       if(body.action === "delete") {
         await ref.delete();
         for(const uid of [current.buyerId,current.sellerId].filter(Boolean)) await notifyUser({userId:String(uid),type:"order_deleted",eventId:body.id,title:"Order/dispute removed",message:`Order #${String(current.orderNumber||body.id)} was removed from the administrator dashboard.${body.note ? ` ${body.note}` : ""}`});
+      } else if (body.action === "requestInfo") {
+        const note = String(body.note||"").trim();
+        if (!note) throw new Error("Enter what information you need from the buyer and seller.");
+        const number = String(current.orderNumber||body.id);
+        changes = {...changes,infoRequestedAt:FieldValue.serverTimestamp(),infoRequestNote:note,infoRequestedBy:actingAdmin.email};
+        await ref.set(changes,{merge:true});
+        if(current.buyerId) await notifyUser({userId:String(current.buyerId),type:"order_info_requested",eventId:`${body.id}_info_requested_${Date.now()}`,title:`More information needed — order #${number}`,message:`The administrator needs more information about this dispute: ${note}`,link:`/?order=${body.id}`,email:true});
+        if(current.sellerId) await notifyUser({userId:String(current.sellerId),type:"order_info_requested",eventId:`${body.id}_info_requested_seller_${Date.now()}`,title:`More information needed — order #${number}`,message:`The administrator needs more information about this dispute: ${note}`,link:"/?seller=1",email:true});
+        if(current.buyerId&&current.sellerId) await postSystemMessage({buyerId:String(current.buyerId),sellerId:String(current.sellerId),orderId:body.id,text:`ℹ️ Administrator requested more information for order #${number}: ${note}`});
       } else if (body.action === "resolve") {
         if (String(current.status) !== "disputed") throw new Error("Only disputed orders can be resolved with a split.");
         const totalCents = Number(current.serviceCents || 0);
