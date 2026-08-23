@@ -4,7 +4,7 @@ import { getClientAuth } from "@/lib/firebase-client";
 import PhoneVerification from "./PhoneVerification";
 
 const WITHDRAWAL_FEE_RATE = 0.05;
-const MIN_WITHDRAWAL_CENTS = 500;
+const MIN_WITHDRAWAL_CENTS = 10000;
 const ADDRESS_PATTERN: Record<"USDT" | "USDC", RegExp> = { USDT: /^T[a-zA-Z0-9]{33}$/, USDC: /^0x[a-fA-F0-9]{40}$/ };
 const NETWORK_LABEL: Record<"USDT" | "USDC", string> = { USDT: "Tron (TRC20)", USDC: "BNB Smart Chain (BEP20)" };
 
@@ -70,8 +70,8 @@ export default function WithdrawalRequestForm({ onClose, defaultCurrency, onSubm
   const continueStep = () => {
     setNotice("");
     if (step === 1) {
-      if (availableCents < MIN_WITHDRAWAL_CENTS) { setNotice(`Your available ${currency} balance is below the $5.00 minimum withdrawal.`); return; }
-      if (!validAmount) { setNotice(`Enter an amount between $5.00 and $${(availableCents / 100).toFixed(2)}.`); return; }
+      if (availableCents < MIN_WITHDRAWAL_CENTS) { setNotice(`Your available ${currency} balance is below the $100.00 minimum withdrawal.`); return; }
+      if (!validAmount) { setNotice(`Enter an amount between $100.00 and $${(availableCents / 100).toFixed(2)}.`); return; }
       setStep(2);
       return;
     }
@@ -147,7 +147,7 @@ export default function WithdrawalRequestForm({ onClose, defaultCurrency, onSubm
           <option value="USDC" disabled={usdcAvailableCents < MIN_WITHDRAWAL_CENTS}>USDC — ${(usdcAvailableCents / 100).toFixed(2)} available</option>
         </select></label>
         <label>Amount to withdraw (USD value) <span>Available: ${(availableCents / 100).toFixed(2)}</span>
-          <input type="number" min="5" step="0.01" max={(availableCents / 100).toFixed(2)} value={amount} onChange={e => setAmount(e.target.value)} placeholder="Minimum $5.00" />
+          <input type="number" min="100" step="0.01" max={(availableCents / 100).toFixed(2)} value={amount} onChange={e => setAmount(e.target.value)} placeholder="Minimum $100.00" />
         </label>
         {amountCents > 0 && <div className="listingPreview" style={{ padding: 16 }}>
           <div style={{ display: "flex", justifyContent: "space-between" }}><span>Amount</span><b>${(amountCents / 100).toFixed(2)} {currency}</b></div>
