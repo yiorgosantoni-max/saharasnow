@@ -3,9 +3,9 @@ import { FieldValue } from "firebase-admin/firestore";
 import { Resend } from "resend";
 import { z } from "zod";
 import { db } from "@/lib/firebase-admin";
-import { cryptoOrderNumber, resolveCryptoDeposit } from "@/lib/crypto-deposit";
+import { resolveCryptoDeposit } from "@/lib/crypto-deposit";
 import { notifyUser } from "@/lib/notifications";
-import { publicError,required,userFromRequest } from "@/lib/server";
+import { orderNumberFor, publicError,required,userFromRequest } from "@/lib/server";
 
 export const runtime="nodejs";
 export const dynamic="force-dynamic";
@@ -62,21 +62,26 @@ export async function PATCH(req:NextRequest){
     const amountCents=Math.max(1,Math.round(price*100));
     const {network,address:depositAddress}=resolveCryptoDeposit(currency);
     if(!depositAddress)return NextResponse.json({error:"USDC payments are not configured yet. Add USDC_BEP20_DEPOSIT_ADDRESS in the server environment."},{status:503});
-    const invoiceRef=db.collection("customInvoices").doc();
-    const paymentOrderNumber=cryptoOrderNumber(invoiceRef.id,currency);
+    // Accepting turns the offer into a first-class order using the same shape
+    // /api/crypto/checkout creates for a marketplace listing purchase. That
+    // means the standard crypto-payment + BingX verification pipeline (and
+    // the admin CRYPTO dashboard), delivery, revisions, disputes and the
+    // automatic clearance/release cron all apply to it with no extra code.
+    const orderRef=db.collection("orders").doc();
+    const paymentOrderNumber=orderNumberFor(orderRef.id,currency);
 
     await db.runTransaction(async tx=>{
       const fresh=await tx.get(offerRef);
       if(String((fresh.data()||{}).status||"sent")!=="sent")throw new Error("This custom offer has already been actioned.");
-      tx.set(offerRef,{status:"accepted",invoiceId:invoiceRef.id,updatedAt:FieldValue.serverTimestamp()},{merge:true});
-      tx.create(invoiceRef,{purpose:"service-order",customOfferId:body.offerId,buyerId:user.uid,sellerId:senderId,title,description:details,amountCents,serviceCents:amountCents,sellerNetCents:amountCents,platformFeeCents:0,stripeMarkupCents:0,checkoutTotalCents:amountCents,currency,paymentCurrency:currency,network,depositAddress,orderNumber:paymentOrderNumber,status:"awaiting-crypto-payment",paymentMethod:currency==="USDT"?"crypto-usdt-trc20":"usdc-bep20",createdAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp()});
+      tx.set(offerRef,{status:"accepted",orderId:orderRef.id,updatedAt:FieldValue.serverTimestamp()},{merge:true});
+      tx.create(orderRef,{buyerId:user.uid,sellerId:senderId,listingId:"",title,packageName:"Custom offer",packageDeliveryDays:7,orderNumber:paymentOrderNumber,serviceCents:amountCents,sellerNetCents:amountCents,buyerFeeCents:0,platformFeeCents:0,checkoutTotalCents:amountCents,totalCents:amountCents,currency:"USD",paymentCurrency:currency,network,depositAddress,paymentMethod:currency==="USDT"?"usdt-trc20":"usdc-bep20",status:"awaiting-crypto-payment",isCustomOrder:true,customOfferId:body.offerId,customOfferDetails:details,createdAt:FieldValue.serverTimestamp(),updatedAt:FieldValue.serverTimestamp()});
     });
 
-    await notifyUser({userId:senderId,type:"custom_order_accepted",eventId:`${body.offerId}_accepted`,title:"Custom offer accepted",message:`${recipientName} accepted your custom offer "${title}". Payment is now pending.`,link:"/?custom-orders=1"});
-    await notifyUser({userId:user.uid,type:"custom_order_accepted_buyer",eventId:`${body.offerId}_accepted_buyer`,title:"Custom offer accepted",message:`You accepted the custom offer "${title}". Send ${(amountCents/100).toFixed(2)} ${currency} to complete the order.`,link:"/?custom-orders=1"});
-    if(sender.email){try{await new Resend(required("RESEND_API_KEY")).emails.send({from:required("EMAIL_FROM"),to:String(sender.email),subject:"Your custom offer was accepted",html:`<h1>Custom offer accepted</h1><p>Hello ${String(sender.firstName||"there")},</p><p>${recipientName} accepted your custom offer for <b>${title}</b>. They are now completing payment of ${(amountCents/100).toFixed(2)} ${currency}.</p>`});}catch{}}
-    if(recipient.email){try{const app=required("APP_URL");await new Resend(required("RESEND_API_KEY")).emails.send({from:required("EMAIL_FROM"),to:String(recipient.email),subject:"Complete payment for your accepted custom offer",html:`<h1>Complete your payment</h1><p>Hello ${String(recipient.firstName||"there")},</p><p>You accepted the custom offer <b>${title}</b> from ${senderName}. Send exactly <b>${(amountCents/100).toFixed(2)} ${currency}</b> on <b>${network}</b> to complete the order.</p><p><a href="${app}/?inbox=1">Open your inbox to pay</a></p>`});}catch{}}
+    await notifyUser({userId:senderId,type:"custom_order_accepted",eventId:`${body.offerId}_accepted`,title:"Custom offer accepted",message:`${recipientName} accepted your custom offer "${title}" (order #${paymentOrderNumber}). Payment is now pending.`,link:"/?custom-orders=1"});
+    await notifyUser({userId:user.uid,type:"custom_order_accepted_buyer",eventId:`${body.offerId}_accepted_buyer`,title:"Custom offer accepted",message:`You accepted the custom offer "${title}" (order #${paymentOrderNumber}). Send ${(amountCents/100).toFixed(2)} ${currency} to complete the order.`,link:"/?custom-orders=1"});
+    if(sender.email){try{await new Resend(required("RESEND_API_KEY")).emails.send({from:required("EMAIL_FROM"),to:String(sender.email),subject:"Your custom offer was accepted",html:`<h1>Custom offer accepted</h1><p>Hello ${String(sender.firstName||"there")},</p><p>${recipientName} accepted your custom offer for <b>${title}</b> — order #${paymentOrderNumber}. They are now completing payment of ${(amountCents/100).toFixed(2)} ${currency}.</p>`});}catch{}}
+    if(recipient.email){try{const app=required("APP_URL");await new Resend(required("RESEND_API_KEY")).emails.send({from:required("EMAIL_FROM"),to:String(recipient.email),subject:"Complete payment for your accepted custom offer",html:`<h1>Complete your payment</h1><p>Hello ${String(recipient.firstName||"there")},</p><p>You accepted the custom offer <b>${title}</b> from ${senderName} — order #${paymentOrderNumber}. Send exactly <b>${(amountCents/100).toFixed(2)} ${currency}</b> on <b>${network}</b> to complete the order.</p><p><a href="${app}/?inbox=1">Open your inbox to pay</a></p>`});}catch{}}
 
-    return NextResponse.json({ok:true,status:"accepted",invoiceId:invoiceRef.id,orderNumber:paymentOrderNumber,amountCents,currency,network,depositAddress});
+    return NextResponse.json({ok:true,status:"accepted",orderId:orderRef.id,orderNumber:paymentOrderNumber,amountCents,currency,network,depositAddress});
   }catch(e){const x=publicError(e);return NextResponse.json({error:x.message},{status:x.status});}
 }
