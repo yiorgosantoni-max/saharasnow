@@ -82,6 +82,16 @@ export default function PhoneVerification({ phoneVerified, phoneOnFile, onVerifi
     </div>;
   }
 
+  if (allowSetNumber && phoneVerified) {
+    const subject = encodeURIComponent("Mobile number change request");
+    const body = encodeURIComponent(`Please change my verified mobile number on SaharaSnow.\n\nFull name:\nAccount email:\nCurrent bound number: ${phoneOnFile}\nNew number requested:\nReason for change:\n\nI understand I may be asked to confirm my identity with a KYC document matching my profile before this change is made.`);
+    return <div className="listingStep" style={{ margin: 0 }}>
+      <p>✓ Verified: <b>{phoneOnFile}</b></p>
+      <p className="listingNotice">To protect withdrawals, a verified mobile number can't be changed from your profile. Email the administrator with your full name, account email, current number, new number and reason for the change — a KYC document matching your profile may be required before it's updated.</p>
+      <a className="primary" style={{ display: "inline-block", textDecoration: "none", textAlign: "center" }} href={`mailto:info@saharasnow.com?subject=${subject}&body=${body}`}>Request number change</a>
+    </div>;
+  }
+
   return <div className="listingStep" style={{ margin: 0 }}>
     <div ref={recaptchaContainerRef} />
     {phoneVerified && !codeSent && <p>✓ Verified: <b>{phoneOnFile}</b></p>}
