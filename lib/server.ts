@@ -62,6 +62,20 @@ export async function claimSignupSlot(uid: string) {
   });
 }
 
+/**
+ * Buyers pay a 1% service fee on top of the listing price. The buyer sends
+ * service + fee; the platform retains the fee and only the service amount is
+ * ever credited to the seller. Defined once here so every checkout path
+ * (listing, custom order, custom invoice, admin) charges the same rate.
+ */
+export const BUYER_FEE_RATE = 0.01;
+
+export function buyerFeeBreakdown(serviceCents: number) {
+  const service = Math.max(0, Math.round(serviceCents));
+  const fee = Math.round(service * BUYER_FEE_RATE);
+  return { serviceCents: service, buyerFeeCents: fee, checkoutTotalCents: service + fee, sellerNetCents: service };
+}
+
 export function orderNumberFor(id: string, currency = "USD") {
   return `${currency}-${id.replace(/[^a-z0-9]/gi, "").slice(-10).toUpperCase()}`;
 }
