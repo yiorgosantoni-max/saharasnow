@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
     if (purpose === "register" && !existingUser) {
       const remaining = await signupSlotsRemaining();
       if (remaining <= 0) {
-        return NextResponse.json({error: "All 300 launch slots have been claimed. Registration is currently closed."}, {status: 403});
+        return NextResponse.json({error: "Registration is full for this month — all 300 places have been taken. New places open on the 1st."}, {status: 403});
       }
     }
     if (purpose === "login" && !existingUser) {
