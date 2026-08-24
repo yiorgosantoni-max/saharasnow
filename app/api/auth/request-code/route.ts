@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Resend } from "resend";
 import { z } from "zod";
 import { adminAuth, db } from "@/lib/firebase-admin";
-import { otpHash, required } from "@/lib/server";
+import { otpHash, required, signupSlotsRemaining } from "@/lib/server";
 
 const schema = z.object({email: z.string().email().max(254), purpose: z.enum(["login", "register"]).default("login")});
 
@@ -21,6 +21,12 @@ export async function POST(req: NextRequest) {
     }
     if (purpose === "register" && existingUser) {
       return NextResponse.json({error: "Email already registered"}, {status: 409});
+    }
+    if (purpose === "register" && !existingUser) {
+      const remaining = await signupSlotsRemaining();
+      if (remaining <= 0) {
+        return NextResponse.json({error: "All 300 launch slots have been claimed. Registration is currently closed."}, {status: 403});
+      }
     }
     if (purpose === "login" && !existingUser) {
       return NextResponse.json({error: "No account is registered with this email"}, {status: 404});
