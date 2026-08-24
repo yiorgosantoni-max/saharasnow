@@ -101,7 +101,7 @@ export async function GET(req: NextRequest) {
     await admin(req);
     const [kyc, listings, rawWithdrawals, rawOrders, tickets, users, auditLogs, reports] = await Promise.all([
       recent("kyc"), recent("listings"), recent("withdrawals"),
-      recent("orders").then((items: RecentItem[]) => items.filter((item: RecentItem) => ["paid","in-progress","delivered","disputed","completed-released","refunded"].includes(String(item.status)))),
+      recent("orders", 300).then((items: RecentItem[]) => items.filter((item: RecentItem) => ["paid","in-progress","delivered","disputed","completed-released","refunded","awaiting-crypto-payment","payment-submitted","payment-rejected","crypto-received","pending-admin-release","released"].includes(String(item.status)))),
       recent("supportTickets"), recent("users", 100), recent("auditLogs", 200), recent("contentReports", 200)
     ]);
     const tips = await withOrderProfiles(await recent("tips", 200));
