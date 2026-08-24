@@ -28,6 +28,29 @@ export async function userFromRequest(req: NextRequest) {
   return adminAuth.verifyIdToken(token, true);
 }
 
+export const SIGNUP_SLOT_CAP = 300;
+
+/** Read-only check of how many launch slots are left. Not transactional — use claimSignupSlot() for the authoritative, race-safe reservation. */
+export async function signupSlotsRemaining() {
+  const { db } = await import("./firebase-admin");
+  const snap = await db.collection("meta").doc("signupSlots").get();
+  const used = Number(snap.data()?.usedSlots || 0);
+  return Math.max(0, SIGNUP_SLOT_CAP - used);
+}
+
+/** Atomically reserves one of the SIGNUP_SLOT_CAP signup slots. Throws if none remain. */
+export async function claimSignupSlot(uid: string) {
+  const { db } = await import("./firebase-admin");
+  const ref = db.collection("meta").doc("signupSlots");
+  return db.runTransaction(async tx => {
+    const snap = await tx.get(ref);
+    const used = Number(snap.data()?.usedSlots || 0);
+    if (used >= SIGNUP_SLOT_CAP) throw new Error(`Registration is closed — all ${SIGNUP_SLOT_CAP} launch slots have been claimed.`);
+    tx.set(ref, { usedSlots: used + 1, lastClaimedBy: uid, updatedAt: FieldValue.serverTimestamp() }, { merge: true });
+    return used + 1;
+  });
+}
+
 export function orderNumberFor(id: string, currency = "USD") {
   return `${currency}-${id.replace(/[^a-z0-9]/gi, "").slice(-10).toUpperCase()}`;
 }
