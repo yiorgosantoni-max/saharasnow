@@ -57,7 +57,6 @@ async function withSellerProfiles(withdrawals: RecentItem[]): Promise<RecentItem
       sellerLastName: String(seller.lastName || ""),
       sellerEmail: String(seller.email || ""),
       sellerProfileImageUrl: String(seller.profileImageUrl || ""),
-      // Older records may predate storing payoutNetwork; fall back to the canonical label for the currency.
       payoutNetwork: String(w.payoutNetwork || NETWORK_LABEL[currency] || ""),
     };
   });
@@ -263,4 +262,12 @@ export async function PATCH(req: NextRequest) {
       }
     }
 
-    if (!writtenInTransaction && body.resource
+    if (!writtenInTransaction && body.resource !== "listing" && body.resource !== "order" && body.resource !== "report") await ref.set(changes,{merge:true});
+    await db.collection("auditLogs").add({adminUid:actingAdmin.uid,adminEmail:actingAdmin.email,resource:body.resource,resourceId:body.id,action:body.action,note:body.note||"",createdAt:FieldValue.serverTimestamp()});
+    return NextResponse.json({ok:true});
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Admin action failed";
+    const forbidden = message === "ADMIN_FORBIDDEN" || message === "UNAUTHENTICATED";
+    return NextResponse.json({error:forbidden ? "Administrator access required." : message},{status:forbidden?403:400});
+  }
+}
