@@ -17,6 +17,9 @@ const MAX_AUTH_AGE_SECONDS = 600;
 export async function POST(req: NextRequest) {
   try {
     const user = await userFromRequest(req);
+    const profileSnap = await db.collection("users").doc(user.uid).get();
+    const kycStatus = String(profileSnap.data()?.kycStatus || "not-started");
+    if (kycStatus !== "approved") throw new Error("Complete KYC identity verification before setting up SMS one-time codes.");
     const phoneNumber = String(user.phone_number || "").trim();
     if (!phoneNumber) throw new Error("No verified phone number found on this session. Verify your phone number again.");
     const authTime = Number(user.auth_time || 0);
