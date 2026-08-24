@@ -61,7 +61,7 @@ export async function PATCH(req:NextRequest){
 
     const amountCents=Math.max(1,Math.round(price*100));
     const {network,address:depositAddress}=resolveCryptoDeposit(currency);
-    if(!depositAddress)return NextResponse.json({error:"USDC payments are not configured yet. Add USDC_BEP20_DEPOSIT_ADDRESS in the server environment."},{status:503});
+    if(!depositAddress)return NextResponse.json({error:"USDC payments are not configured yet. Add USDC_SOLANA_DEPOSIT_ADDRESS in the server environment."},{status:503});
     // Accepting turns the offer into a first-class order using the same shape
     // /api/crypto/checkout creates for a marketplace listing purchase. That
     // means the standard crypto-payment + BingX verification pipeline (and
