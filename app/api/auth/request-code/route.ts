@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Resend } from "resend";
 import { z } from "zod";
 import { adminAuth, db } from "@/lib/firebase-admin";
-import { otpHash, registrationSlotsAvailable, REGISTRATION_LIMIT_MESSAGE, required } from "@/lib/server";
+import { otpHash, required } from "@/lib/server";
 
 const schema = z.object({email: z.string().email().max(254), purpose: z.enum(["login", "register"]).default("login")});
 
@@ -21,9 +21,6 @@ export async function POST(req: NextRequest) {
     }
     if (purpose === "register" && existingUser) {
       return NextResponse.json({error: "Email already registered"}, {status: 409});
-    }
-    if (purpose === "register" && !(await registrationSlotsAvailable())) {
-      return NextResponse.json({error: REGISTRATION_LIMIT_MESSAGE}, {status: 403});
     }
     if (purpose === "login" && !existingUser) {
       return NextResponse.json({error: "No account is registered with this email"}, {status: 404});
