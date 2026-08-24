@@ -74,6 +74,13 @@ async function withOrderProfiles(orders: RecentItem[]): Promise<RecentItem[]> {
       lastName: String(u.lastName || ""),
       email: String(u.email || ""),
       profileImageUrl: String(u.profileImageUrl || u.photoURL || ""),
+      // Payout destinations, so a dispute can be settled without leaving the row.
+      usdtAddress: String(u.usdtWithdrawAddress || ""),
+      usdtNetwork: String(u.usdtWithdrawAddressNetwork || (u.usdtWithdrawAddress ? NETWORK_LABEL.USDT : "")),
+      usdcAddress: String(u.usdcWithdrawAddress || ""),
+      usdcNetwork: String(u.usdcWithdrawAddressNetwork || (u.usdcWithdrawAddress ? NETWORK_LABEL.USDC : "")),
+      phoneNumber: String(u.phoneNumber || ""),
+      kycStatus: String(u.kycStatus || "not-started"),
     };
   };
   return orders.map(o => {
@@ -82,7 +89,9 @@ async function withOrderProfiles(orders: RecentItem[]): Promise<RecentItem[]> {
     return {
       ...o,
       buyerFirstName: buyer.firstName, buyerLastName: buyer.lastName, buyerEmail: buyer.email, buyerProfileImageUrl: buyer.profileImageUrl,
+      buyerUsdtAddress: buyer.usdtAddress, buyerUsdtNetwork: buyer.usdtNetwork, buyerUsdcAddress: buyer.usdcAddress, buyerUsdcNetwork: buyer.usdcNetwork, buyerPhone: buyer.phoneNumber, buyerKyc: buyer.kycStatus,
       sellerFirstName: seller.firstName, sellerLastName: seller.lastName, sellerEmail: seller.email, sellerProfileImageUrl: seller.profileImageUrl,
+      sellerUsdtAddress: seller.usdtAddress, sellerUsdtNetwork: seller.usdtNetwork, sellerUsdcAddress: seller.usdcAddress, sellerUsdcNetwork: seller.usdcNetwork, sellerPhone: seller.phoneNumber, sellerKyc: seller.kycStatus,
     };
   });
 }
