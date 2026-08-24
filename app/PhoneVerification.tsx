@@ -23,6 +23,15 @@ export default function PhoneVerification({ phoneVerified, phoneOnFile, onVerifi
     try {
       const auth = getClientAuth();
       if (!auth.currentUser) throw new Error("Please sign in again.");
+      // Ask the server whether this account may set up SMS at all. Firebase
+      // sends the SMS straight from the browser and cannot see KYC status, so
+      // this check has to happen before verifyPhoneNumber or a non-verified
+      // account could still consume SMS quota.
+      const gateToken = await auth.currentUser.getIdToken();
+      const gateRes = await fetch("/api/profile/phone", { headers: { authorization: `Bearer ${gateToken}` }, cache: "no-store" });
+      const gate = await gateRes.json();
+      if (!gateRes.ok) throw new Error(gate.error || "Unable to check verification eligibility.");
+      if (!gate.kycApproved) throw new Error(gate.reason || "Complete KYC identity verification before setting up SMS one-time codes.");
       if (!recaptchaRef.current && recaptchaContainerRef.current) {
         recaptchaRef.current = new RecaptchaVerifier(auth, recaptchaContainerRef.current, { size: "invisible" });
       }
