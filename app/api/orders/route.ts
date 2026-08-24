@@ -29,7 +29,31 @@ export async function GET(req:NextRequest){
     }));
     const docs=[...buyer.docs,...seller.docs.filter(d=>!buyer.docs.some(b=>b.id===d.id))]
       .filter(d=>["paid","in-progress","crypto-received","delivered","disputed","completed-released","refunded"].includes(String(d.data()?.status)));
-    const orders=await Promise.all(docs.map(async doc=>{const data=doc.data();const listing=data.listingId?(await db.collection("listings").doc(String(data.listingId)).get()).data()||{}:{};return {id:doc.id,...data,title:String(data.title||listing.title||"Service"),createdAt:dateValue(data.createdAt),paidAt:dateValue(data.paidAt),disputeDeadline:dateValue(data.disputeDeadline),isBuyer:String(data.buyerId)===user.uid};}));
+    const orders=await Promise.all(docs.map(async doc=>{
+      const data=doc.data();
+      const listing=data.listingId?(await db.collection("listings").doc(String(data.listingId)).get()).data()||{}:{};
+      const isBuyer=String(data.buyerId)===user.uid;
+      let myReview:{rating:number;text:string}|null=null;
+      let feedbackAboutMe:{rating:number;text:string}|null=null;
+      if(String(data.status)==="completed-released"){
+        // "reviews" = the buyer's rating of the seller; "buyerReviews" = the
+        // seller's feedback about the buyer. Whichever side the current
+        // user is on, surface both their own submission and what the
+        // other party said about them, keyed to this same order.
+        const [sellerSideReview,buyerSideReview]=await Promise.all([
+          db.collection("reviews").doc(doc.id).get(),
+          db.collection("buyerReviews").doc(doc.id).get()
+        ]);
+        if(isBuyer){
+          if(sellerSideReview.exists){const r=sellerSideReview.data()||{};myReview={rating:Number(r.rating||0),text:String(r.text||"")};}
+          if(buyerSideReview.exists){const r=buyerSideReview.data()||{};feedbackAboutMe={rating:Number(r.rating||0),text:String(r.text||"")};}
+        }else{
+          if(buyerSideReview.exists){const r=buyerSideReview.data()||{};myReview={rating:Number(r.rating||0),text:String(r.text||"")};}
+          if(sellerSideReview.exists){const r=sellerSideReview.data()||{};feedbackAboutMe={rating:Number(r.rating||0),text:String(r.text||"")};}
+        }
+      }
+      return {id:doc.id,...data,title:String(data.title||listing.title||"Service"),createdAt:dateValue(data.createdAt),paidAt:dateValue(data.paidAt),disputeDeadline:dateValue(data.disputeDeadline),isBuyer,myReview,feedbackAboutMe};
+    }));
     orders.sort((a,b)=>String(b.createdAt||"").localeCompare(String(a.createdAt||"")));
     return NextResponse.json({orders});
   }catch(error){const x=publicError(error);return NextResponse.json({error:x.message},{status:x.status});}
