@@ -12,11 +12,11 @@ export const dynamic="force-dynamic";
 const PACK_SIZE=5;
 const PRICE=2;
 const USDT_TRC20_ADDRESS="TKX1h9L4wWjimF8UVWHQLtFYvWv7TTHdnB";
-const USDC_BEP20_ADDRESS="0x3edce5a73b0a04822108de0e0894eed10987a71a";
+const USDC_SOLANA_ADDRESS="5uFV6zUGS2X6pjxfcDjHXZcDsKprB9AwpWt2RwgwqWVH";
 const QR_BASE="https://api.qrserver.com/v1/create-qr-code/?size=320x320&margin=12&data=";
 const METHODS={
   usdt:{currency:"USDT",network:"Tron (TRC20)",address:USDT_TRC20_ADDRESS},
-  usdc:{currency:"USDC",network:"BNB Smart Chain (BEP20)",address:USDC_BEP20_ADDRESS},
+  usdc:{currency:"USDC",network:"Solana",address:USDC_SOLANA_ADDRESS},
 } as const;
 type Method=keyof typeof METHODS;
 
