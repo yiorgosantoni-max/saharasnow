@@ -54,8 +54,13 @@ async function balanceForSeller(uid:string){
   // bucket rather than the combined total.
   const usdtStored=Math.max(0,Number(profile.usdtBalanceCents||0));
   const usdcStored=Math.max(0,Number(profile.usdcBalanceCents||0));
-  const usdtAvailable=Math.max(0,usdtStored-currencyPendingCents(withdrawalsSnap,"USDT"));
-  const usdcAvailable=Math.max(0,usdcStored-currencyPendingCents(withdrawalsSnap,"USDC"));
+  // usdtStored/usdcStored are already decremented the moment a withdrawal is
+  // requested (see the POST handler below), so they're already net of any
+  // pending request. Subtracting currencyPendingCents again here would
+  // double-count the same pending amount - mirror the combined `available`
+  // logic above instead of re-subtracting it.
+  const usdtAvailable=usdtStored;
+  const usdcAvailable=usdcStored;
   return {profile,available,released,pending,usdtAvailable,usdcAvailable};
 }
 
@@ -109,15 +114,15 @@ export async function POST(req:NextRequest){
       payoutNetwork=String(profile[networkField]||"");
       if(!payoutAddress)throw new Error(`Set and confirm your ${currency} withdrawal address before requesting a withdrawal.`);
 
-      // Recalculate inside the transaction from the user's stored balance and
-      // active requests. This prevents a rejected request from leaving the UI
-      // disabled because of a stale client-side maximum.
+      // Recalculate inside the transaction from the user's stored balance.
+      // storedCurrencyBalance is already net of any pending request (it was
+      // decremented the moment that request was created below), so it is
+      // itself the available amount - do not subtract currencyPending again.
       const withdrawalsQuery=db.collection("withdrawals").where("sellerId","==",user.uid);
       const withdrawals=await tx.get(withdrawalsQuery);
       const balanceField=currency==="USDC"?"usdcBalanceCents":"usdtBalanceCents";
       const storedCurrencyBalance=Math.max(0,Number(profile?.[balanceField]||0));
-      const currencyPending=currencyPendingCents(withdrawals,currency as "USDT"|"USDC");
-      const available=Math.max(0,storedCurrencyBalance-currencyPending);
+      const available=storedCurrencyBalance;
       if(requested>available)throw new Error(`Withdrawal amount cannot exceed your available ${currency} balance of $${(available/100).toFixed(2)}`);
 
       const pending=withdrawals.docs
