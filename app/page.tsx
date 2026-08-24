@@ -193,6 +193,11 @@ const logout=async()=>{await signOutUser();setLoggedIn(false);setAccountPanel(nu
 useEffect(()=>observeAuth((signedIn,userEmail)=>{setLoggedIn(signedIn);if(userEmail)setEmail(userEmail);if(signedIn){loadProfile();const returnTo=sessionStorage.getItem("saharasnow_return_to");if(returnTo){sessionStorage.removeItem("saharasnow_return_to");location.assign(returnTo)}}}),[]);
 useEffect(()=>{if(new URLSearchParams(location.search).get("signin")==="1"){setAuthIntent("login");setAuthStep("email");setCode("");setAuthOpen(true)}},[]);
 useEffect(()=>{if(new URLSearchParams(location.search).get("inbox")==="1"){if(loggedIn){setAuthOpen(false);setAccountPanel("inbox")}else{setAuthIntent("login");setAuthStep("email");setCode("");setAuthOpen(true)}}},[loggedIn]);
+// The subcategory panel renders inline under the category bar, so if the
+// person has scrolled it opens off-screen and looks like nothing happened.
+// Bring the panel into view (allowing for the 76px fixed header) whenever a
+// category is opened, so it always visibly drops downward from the bar.
+useEffect(()=>{if(cat==="All")return;const id=window.requestAnimationFrame(()=>{const panel=document.querySelector(".designMenu");if(!panel)return;const top=panel.getBoundingClientRect().top+window.scrollY-90;window.scrollTo({top:Math.max(0,top),behavior:"smooth"})});return()=>window.cancelAnimationFrame(id)},[cat]);
 useEffect(()=>{if(new URLSearchParams(location.search).get("orders")==="1"){if(loggedIn){setAuthOpen(false);setAccountPanel("orders")}else{setAuthIntent("login");setAuthStep("email");setCode("");setAuthOpen(true)}}},[loggedIn]);
 useEffect(()=>{if(new URLSearchParams(location.search).get("kyc")==="reupload"&&loggedIn){setAuthOpen(false);setAccountPanel("kyc")}},[loggedIn]);
 useEffect(()=>{const result=new URLSearchParams(location.search).get("listing_payment");if(!result)return;if(result==="success")flash("Payment received. Your five-listing pack is active and covered waiting listings are now in the administrator approval queue.");else flash("Listing-credit payment was cancelled. You can resume payment under Seller → My services.")},[]);
