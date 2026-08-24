@@ -5,7 +5,7 @@ import { getClientAuth } from "@/lib/firebase-client";
 
 const PHONE_PATTERN = /^\+[1-9]\d{7,14}$/;
 
-export default function PhoneVerification({ phoneVerified, phoneOnFile, onVerified, allowSetNumber = true }: { phoneVerified: boolean; phoneOnFile: string; onVerified: (phoneNumber: string) => void; allowSetNumber?: boolean }) {
+export default function PhoneVerification({ phoneVerified, phoneOnFile, onVerified, allowSetNumber = true, kycApproved = true }: { phoneVerified: boolean; phoneOnFile: string; onVerified: (phoneNumber: string) => void; allowSetNumber?: boolean; kycApproved?: boolean }) {
   const [phoneInput, setPhoneInput] = useState(phoneOnFile);
   const [codeSent, setCodeSent] = useState(false);
   const [code, setCode] = useState("");
@@ -74,6 +74,12 @@ export default function PhoneVerification({ phoneVerified, phoneOnFile, onVerifi
     } finally {
       setBusy(false);
     }
+  }
+
+  if (!phoneVerified && !kycApproved) {
+    return <div className="listingStep" style={{ margin: 0 }}>
+      <p className="listingNotice" role="alert">Complete KYC identity verification first. Once an administrator approves your documents, you'll be able to set up SMS one-time codes here.</p>
+    </div>;
   }
 
   if (!allowSetNumber && !phoneVerified) {
