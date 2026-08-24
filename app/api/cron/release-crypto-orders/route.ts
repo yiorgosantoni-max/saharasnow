@@ -6,7 +6,7 @@ export const runtime="nodejs";
 export const dynamic="force-dynamic";
 
 const OPEN_DISPUTE_STATUSES=new Set(["open","pending","active","under-review","disputed"]);
-const cryptoMethods=new Set(["crypto-usdt-trc20","usdt-trc20","usdc-bep20"]);
+const cryptoMethods=new Set(["crypto-usdt-trc20","usdt-trc20","usdc-bep20","usdc-solana"]);
 
 function authorized(req:NextRequest){
   const secret=String(process.env.CRON_SECRET||"");
