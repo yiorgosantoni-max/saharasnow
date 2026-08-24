@@ -62,15 +62,39 @@ async function withSellerProfiles(withdrawals: RecentItem[]): Promise<RecentItem
   });
 }
 
+async function withOrderProfiles(orders: RecentItem[]): Promise<RecentItem[]> {
+  const ids = [...new Set(orders.flatMap(o => [String(o.buyerId || ""), String(o.sellerId || "")]).filter(Boolean))];
+  const snaps = await Promise.all(ids.map(id => db.collection("users").doc(id).get()));
+  const people = new Map(snaps.filter(s => s.exists).map(s => [s.id, (s.data() || {}) as Record<string, unknown>]));
+  const profile = (uid: string) => {
+    const u = people.get(uid) || {};
+    return {
+      firstName: String(u.firstName || ""),
+      lastName: String(u.lastName || ""),
+      email: String(u.email || ""),
+      profileImageUrl: String(u.profileImageUrl || u.photoURL || ""),
+    };
+  };
+  return orders.map(o => {
+    const buyer = profile(String(o.buyerId || ""));
+    const seller = profile(String(o.sellerId || ""));
+    return {
+      ...o,
+      buyerFirstName: buyer.firstName, buyerLastName: buyer.lastName, buyerEmail: buyer.email, buyerProfileImageUrl: buyer.profileImageUrl,
+      sellerFirstName: seller.firstName, sellerLastName: seller.lastName, sellerEmail: seller.email, sellerProfileImageUrl: seller.profileImageUrl,
+    };
+  });
+}
+
 export async function GET(req: NextRequest) {
   try {
     await admin(req);
-    const [kyc, listings, rawWithdrawals, orders, tickets, users, auditLogs, reports] = await Promise.all([
+    const [kyc, listings, rawWithdrawals, rawOrders, tickets, users, auditLogs, reports] = await Promise.all([
       recent("kyc"), recent("listings"), recent("withdrawals"),
       recent("orders").then((items: RecentItem[]) => items.filter((item: RecentItem) => ["paid","in-progress","delivered","disputed","completed-released","refunded"].includes(String(item.status)))),
       recent("supportTickets"), recent("users", 100), recent("auditLogs", 200), recent("contentReports", 200)
     ]);
-    const withdrawals = await withSellerProfiles(rawWithdrawals);
+    const [withdrawals, orders] = await Promise.all([withSellerProfiles(rawWithdrawals), withOrderProfiles(rawOrders)]);
     const earnings = users.map((user: RecentItem) => ({id:user.id,name:user.name,email:user.email,mode:user.mode||user.accountMode||"BUYING",totalEarningsCents:Number(user.totalEarningsCents||0),pendingEarningsCents:Number(user.pendingEarningsCents||0),availableBalanceCents:Number(user.availableBalanceCents||0),withdrawnCents:Number(user.withdrawnCents||0)}));
     return NextResponse.json({adminEmail: ADMIN_EMAIL, kyc, listings, withdrawals, orders, tickets, users, earnings, auditLogs, reports});
   } catch (error) {
