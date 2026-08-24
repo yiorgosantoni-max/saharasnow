@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { adminAuth, db } from "@/lib/firebase-admin";
-import { otpHash, safeEqual } from "@/lib/server";
+import { claimSignupSlot, otpHash, safeEqual, signupSlotsRemaining } from "@/lib/server";
 import { notifyAdmin } from "@/lib/admin-notifications";
 
 const schema = z.object({email: z.string().email(), code: z.string().regex(/^\d{6}$/), purpose: z.enum(["login", "register"]).default("login")});
@@ -18,10 +18,25 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({error:"Invalid or expired code"},{status:401});
     }
     let user; let created = false;
+    if (body.purpose === "register") {
+      const remaining = await signupSlotsRemaining();
+      if (remaining <= 0) {
+        await ref.delete();
+        return NextResponse.json({error: "All 300 launch slots have been claimed. Registration is currently closed."}, {status: 403});
+      }
+    }
     try { user = await adminAuth.getUserByEmail(email); }
     catch (error: unknown) {
       if (body.purpose !== "register" || (error as {code?: string})?.code !== "auth/user-not-found") throw error;
       user = await adminAuth.createUser({email,emailVerified:true}); created = true;
+      try {
+        await claimSignupSlot(user.uid);
+      } catch (slotError: unknown) {
+        // Lost the race for the last slot(s) between the check above and now — undo the auth user we just created.
+        await adminAuth.deleteUser(user.uid).catch(() => {});
+        await ref.delete();
+        return NextResponse.json({error: slotError instanceof Error ? slotError.message : "Registration is currently closed."}, {status: 403});
+      }
     }
     if (!created) {
       const profile = (await db.collection("users").doc(user.uid).get()).data() || {};
