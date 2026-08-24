@@ -6,7 +6,7 @@ import PhoneVerification from "./PhoneVerification";
 const WITHDRAWAL_FEE_RATE = 0.10;
 const MIN_WITHDRAWAL_CENTS = 10000;
 const ADDRESS_PATTERN: Record<"USDT" | "USDC", RegExp> = { USDT: /^T[a-zA-Z0-9]{33}$/, USDC: /^0x[a-fA-F0-9]{40}$/ };
-const NETWORK_LABEL: Record<"USDT" | "USDC", string> = { USDT: "Tron (TRC20)", USDC: "BNB Smart Chain (BEP20)" };
+const NETWORK_LABEL: Record<"USDT" | "USDC", string> = { USDT: "Tron (TRC20)", USDC: "Solana" };
 
 type Currency = "USDT" | "USDC";
 type SubmitResult = { currency: Currency; grossCents: number; feeCents: number; netCents: number };
