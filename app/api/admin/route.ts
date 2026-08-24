@@ -42,7 +42,7 @@ async function recent(collection: string, limit = 100): Promise<RecentItem[]> {
   return snap.docs.map(doc => jsonValue({id: doc.id, ...doc.data()}) as RecentItem);
 }
 
-const NETWORK_LABEL: Record<string,string> = { USDT: "Tron (TRC20)", USDC: "BNB Smart Chain (BEP20)" };
+const NETWORK_LABEL: Record<string,string> = { USDT: "Tron (TRC20)", USDC: "Solana" };
 
 async function withSellerProfiles(withdrawals: RecentItem[]): Promise<RecentItem[]> {
   const sellerIds = [...new Set(withdrawals.map(w => String(w.sellerId || "")).filter(Boolean))];
