@@ -42,14 +42,36 @@ async function recent(collection: string, limit = 100): Promise<RecentItem[]> {
   return snap.docs.map(doc => jsonValue({id: doc.id, ...doc.data()}) as RecentItem);
 }
 
+const NETWORK_LABEL: Record<string,string> = { USDT: "Tron (TRC20)", USDC: "BNB Smart Chain (BEP20)" };
+
+async function withSellerProfiles(withdrawals: RecentItem[]): Promise<RecentItem[]> {
+  const sellerIds = [...new Set(withdrawals.map(w => String(w.sellerId || "")).filter(Boolean))];
+  const sellerSnaps = await Promise.all(sellerIds.map(id => db.collection("users").doc(id).get()));
+  const sellers = new Map(sellerSnaps.filter(s => s.exists).map(s => [s.id, (s.data() || {}) as Record<string, unknown>]));
+  return withdrawals.map(w => {
+    const seller = sellers.get(String(w.sellerId || "")) || {};
+    const currency = String(w.currency || "").toUpperCase();
+    return {
+      ...w,
+      sellerFirstName: String(seller.firstName || ""),
+      sellerLastName: String(seller.lastName || ""),
+      sellerEmail: String(seller.email || ""),
+      sellerProfileImageUrl: String(seller.profileImageUrl || ""),
+      // Older records may predate storing payoutNetwork; fall back to the canonical label for the currency.
+      payoutNetwork: String(w.payoutNetwork || NETWORK_LABEL[currency] || ""),
+    };
+  });
+}
+
 export async function GET(req: NextRequest) {
   try {
     await admin(req);
-    const [kyc, listings, withdrawals, orders, tickets, users, auditLogs, reports] = await Promise.all([
+    const [kyc, listings, rawWithdrawals, orders, tickets, users, auditLogs, reports] = await Promise.all([
       recent("kyc"), recent("listings"), recent("withdrawals"),
       recent("orders").then((items: RecentItem[]) => items.filter((item: RecentItem) => ["paid","in-progress","delivered","disputed","completed-released","refunded"].includes(String(item.status)))),
       recent("supportTickets"), recent("users", 100), recent("auditLogs", 200), recent("contentReports", 200)
     ]);
+    const withdrawals = await withSellerProfiles(rawWithdrawals);
     const earnings = users.map((user: RecentItem) => ({id:user.id,name:user.name,email:user.email,mode:user.mode||user.accountMode||"BUYING",totalEarningsCents:Number(user.totalEarningsCents||0),pendingEarningsCents:Number(user.pendingEarningsCents||0),availableBalanceCents:Number(user.availableBalanceCents||0),withdrawnCents:Number(user.withdrawnCents||0)}));
     return NextResponse.json({adminEmail: ADMIN_EMAIL, kyc, listings, withdrawals, orders, tickets, users, earnings, auditLogs, reports});
   } catch (error) {
@@ -241,12 +263,4 @@ export async function PATCH(req: NextRequest) {
       }
     }
 
-    if (!writtenInTransaction && body.resource !== "listing" && body.resource !== "order" && body.resource !== "report") await ref.set(changes,{merge:true});
-    await db.collection("auditLogs").add({adminUid:actingAdmin.uid,adminEmail:actingAdmin.email,resource:body.resource,resourceId:body.id,action:body.action,note:body.note||"",createdAt:FieldValue.serverTimestamp()});
-    return NextResponse.json({ok:true});
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Admin action failed";
-    const forbidden = message === "ADMIN_FORBIDDEN" || message === "UNAUTHENTICATED";
-    return NextResponse.json({error:forbidden ? "Administrator access required." : message},{status:forbidden?403:400});
-  }
-}
+    if (!writtenInTransaction && body.resource
