@@ -15,11 +15,11 @@ const schema = z.object({
 
 const addressPattern: Record<"USDT" | "USDC", RegExp> = {
   USDT: /^T[a-zA-Z0-9]{33}$/,
-  USDC: /^0x[a-fA-F0-9]{40}$/,
+  USDC: /^[1-9A-HJ-NP-Za-km-z]{32,44}$/,
 };
 const networkLabel: Record<"USDT" | "USDC", string> = {
   USDT: "Tron (TRC20)",
-  USDC: "BNB Smart Chain (BEP20)",
+  USDC: "Solana",
 };
 
 export async function POST(req: NextRequest) {
