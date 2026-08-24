@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { adminAuth, db } from "@/lib/firebase-admin";
-import { otpHash, REGISTRATION_LIMIT_MESSAGE, reserveRegistrationSlot, safeEqual } from "@/lib/server";
+import { otpHash, safeEqual } from "@/lib/server";
 import { notifyAdmin } from "@/lib/admin-notifications";
 
 const schema = z.object({email: z.string().email(), code: z.string().regex(/^\d{6}$/), purpose: z.enum(["login", "register"]).default("login")});
@@ -21,7 +21,6 @@ export async function POST(req: NextRequest) {
     try { user = await adminAuth.getUserByEmail(email); }
     catch (error: unknown) {
       if (body.purpose !== "register" || (error as {code?: string})?.code !== "auth/user-not-found") throw error;
-      try { await reserveRegistrationSlot(); } catch { return NextResponse.json({error: REGISTRATION_LIMIT_MESSAGE}, {status: 403}); }
       user = await adminAuth.createUser({email,emailVerified:true}); created = true;
     }
     if (!created) {
