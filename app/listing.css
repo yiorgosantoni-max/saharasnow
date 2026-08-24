@@ -81,7 +81,7 @@
 .steps .step:nth-child(4) h3::after{content:"⭐ Love the result"}
 .steps .step p{font-size:0!important}
 .steps .step:nth-child(1) p::after{content:"🧭 Browse services by skill, budget, delivery time, and seller ratings."}
-.steps .step:nth-child(2) p::after{content:"💰 Pay the listed price with 0% buyer fees and no extra checkout charges."}
+.steps .step:nth-child(2) p::after{content:"💰 Pay the listed price plus a 1% buyer fee — no other checkout charges."}
 .steps .step:nth-child(3) p::after{content:"💬 Message your seller, 📎 share attachments, and stay connected throughout the order."}
 .steps .step:nth-child(4) p::after{content:"✅ Approve your delivery and ⭐ leave a star rating for your experience."}
 .steps .step p::after{display:block;font-size:13px;line-height:1.5;color:var(--muted)}
