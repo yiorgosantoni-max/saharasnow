@@ -113,6 +113,11 @@ export async function POST(req:NextRequest){
       payoutAddress=String(profile[addressField]||"");
       payoutNetwork=String(profile[networkField]||"");
       if(!payoutAddress)throw new Error(`Set and confirm your ${currency} withdrawal address before requesting a withdrawal.`);
+      // USDC moved from BNB Smart Chain (BEP20) to Solana. Any address saved
+      // before that switch is an EVM 0x address that cannot receive Solana
+      // USDC - block the payout and make the seller re-confirm a Solana address
+      // rather than sending funds to an unrecoverable destination.
+      if(currency==="USDC"&&(payoutAddress.startsWith("0x")||!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(payoutAddress)))throw new Error("USDC withdrawals now use the Solana network. Your saved USDC address is for the old BNB Smart Chain (BEP20) network and cannot receive Solana USDC. Please set and confirm a Solana USDC address before withdrawing.");
 
       // Recalculate inside the transaction from the user's stored balance.
       // storedCurrencyBalance is already net of any pending request (it was
