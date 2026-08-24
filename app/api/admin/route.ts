@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 
 const ADMIN_EMAIL = (process.env.SUPER_ADMIN_EMAIL || "yiorgosantoni@gmail.com").toLowerCase();
 const actionSchema = z.object({
-  resource: z.enum(["kyc", "listing", "withdrawal", "order", "ticket", "user", "users", "report", "auditLogs"]),
+  resource: z.enum(["kyc", "listing", "withdrawal", "order", "ticket", "user", "users", "report", "auditLogs", "tip"]),
   id: z.string().min(1).max(200),
   action: z.enum(["approve", "reject", "reupload", "delete", "paid", "release", "refund", "resolve", "close", "suspend", "restore", "clearAll", "deleteSelected", "forceLogoutAll", "deleteSelectedOrders", "deleteSelectedListings", "resetPhone", "restoreKyc"]),
   ids: z.array(z.string().min(1).max(200)).max(200).optional(),
@@ -57,6 +57,7 @@ async function withSellerProfiles(withdrawals: RecentItem[]): Promise<RecentItem
       sellerLastName: String(seller.lastName || ""),
       sellerEmail: String(seller.email || ""),
       sellerProfileImageUrl: String(seller.profileImageUrl || ""),
+      // Older records may predate storing payoutNetwork; fall back to the canonical label for the currency.
       payoutNetwork: String(w.payoutNetwork || NETWORK_LABEL[currency] || ""),
     };
   });
@@ -94,9 +95,10 @@ export async function GET(req: NextRequest) {
       recent("orders").then((items: RecentItem[]) => items.filter((item: RecentItem) => ["paid","in-progress","delivered","disputed","completed-released","refunded"].includes(String(item.status)))),
       recent("supportTickets"), recent("users", 100), recent("auditLogs", 200), recent("contentReports", 200)
     ]);
+    const tips = await withOrderProfiles(await recent("tips", 200));
     const [withdrawals, orders] = await Promise.all([withSellerProfiles(rawWithdrawals), withOrderProfiles(rawOrders)]);
     const earnings = users.map((user: RecentItem) => ({id:user.id,name:user.name,email:user.email,mode:user.mode||user.accountMode||"BUYING",totalEarningsCents:Number(user.totalEarningsCents||0),pendingEarningsCents:Number(user.pendingEarningsCents||0),availableBalanceCents:Number(user.availableBalanceCents||0),withdrawnCents:Number(user.withdrawnCents||0)}));
-    return NextResponse.json({adminEmail: ADMIN_EMAIL, kyc, listings, withdrawals, orders, tickets, users, earnings, auditLogs, reports});
+    return NextResponse.json({adminEmail: ADMIN_EMAIL, kyc, listings, withdrawals, orders, tickets, users, earnings, auditLogs, reports, tips});
   } catch (error) {
     const forbidden = error instanceof Error && (error.message === "ADMIN_FORBIDDEN" || error.message === "UNAUTHENTICATED");
     return NextResponse.json({error: forbidden ? "Only the SaharaSnow administrator can access this dashboard." : "Unable to load the admin dashboard."}, {status: forbidden ? 403 : 500});
@@ -165,7 +167,7 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ok:true});
     }
 
-    const collections = {kyc:"kyc", listing:"listings", withdrawal:"withdrawals", order:"orders", ticket:"supportTickets", user:"users", report:"contentReports"} as const;
+    const collections = {kyc:"kyc", listing:"listings", withdrawal:"withdrawals", order:"orders", ticket:"supportTickets", user:"users", report:"contentReports", tip:"tips"} as const;
     const collection = collections[body.resource as keyof typeof collections];
     if (!collection) throw new Error("INVALID_RESOURCE");
     const ref = db.collection(collection).doc(body.id);
@@ -260,6 +262,25 @@ export async function PATCH(req: NextRequest) {
         if(current.sellerId) await notifyUser({userId:String(current.sellerId),type:`order_${body.action}`,eventId:body.id,title:body.action === "release" ? "Earnings released" : "Order refunded",message:body.action === "release" ? `Order #${String(current.orderNumber||body.id)} was released. ${((Number(current.sellerNetCents ?? current.serviceCents)||0)/100).toFixed(2)} USD has been added to your seller earnings.` : `Order #${String(current.orderNumber||body.id)} was refunded, so no seller earnings were released.`,link:"/?seller=1",email:true});
         if(current.buyerId&&current.sellerId) await postSystemMessage({buyerId:String(current.buyerId),sellerId:String(current.sellerId),orderId:body.id,text:body.action==="release"?`✅ Order #${String(current.orderNumber||body.id)} was released and marked complete by an administrator.`:`↩️ Order #${String(current.orderNumber||body.id)} was refunded by an administrator.${body.note?` Note: ${body.note}`:""}`});
       }
+    } else if (body.resource === "tip") {
+      if (!['approve','reject'].includes(body.action)) throw new Error("INVALID_ACTION");
+      changes = {...changes,status:body.action === "approve" ? "credited" : "rejected",adminNote:body.note||"",processedBy:actingAdmin.email,processedAt:FieldValue.serverTimestamp()};
+      await db.runTransaction(async tx=>{
+        const fresh=await tx.get(ref);
+        const value=fresh.data()||{};
+        if(["credited","rejected"].includes(String(value.status)))throw new Error("This tip has already been processed.");
+        tx.set(ref,changes,{merge:true});
+        // Credit the seller only on approval. The platform holds the crypto and
+        // forwards the full amount to the seller's balance - no fee is taken.
+        if(body.action==="approve"&&value.sellerId&&Number(value.amountCents)>0){
+          const balanceField=String(value.currency||"").toUpperCase()==="USDC"?"usdcBalanceCents":"usdtBalanceCents";
+          tx.set(db.collection("users").doc(String(value.sellerId)),{[balanceField]:FieldValue.increment(Number(value.amountCents)),availableBalanceCents:FieldValue.increment(Number(value.amountCents)),updatedAt:FieldValue.serverTimestamp()},{merge:true});
+        }
+      });
+      writtenInTransaction = true;
+      const tipAmount = `${(Number(current.amountCents||0)/100).toFixed(2)} ${String(current.currency||"")}`;
+      if(current.sellerId&&body.action==="approve") await notifyUser({userId:String(current.sellerId),type:"tip_received",eventId:body.id,title:"You received a tip",message:`A buyer tipped you ${tipAmount} on order #${String(current.orderNumber||body.id)}. It has been added to your available balance.`,link:"/?seller=1",email:true});
+      if(current.buyerId) await notifyUser({userId:String(current.buyerId),type:`tip_${body.action}`,eventId:body.id,title:body.action==="approve"?"Tip delivered":"Tip could not be verified",message:body.action==="approve"?`Your ${tipAmount} tip for order #${String(current.orderNumber||body.id)} was verified and passed to the seller. Thank you!`:`Your ${tipAmount} tip could not be verified${body.note?`: ${body.note}`:"."} No balance was credited.`,link:"/?orders=1",email:true});
     } else if (body.resource === "ticket") {
       if (body.action !== "close") throw new Error("INVALID_ACTION");
       changes = {...changes,status:"closed",adminNote:body.note||"",closedBy:actingAdmin.email,closedAt:FieldValue.serverTimestamp()};
@@ -286,7 +307,7 @@ export async function PATCH(req: NextRequest) {
       }
     }
 
-    if (!writtenInTransaction && body.resource !== "listing" && body.resource !== "order" && body.resource !== "report") await ref.set(changes,{merge:true});
+    if (!writtenInTransaction && body.resource !== "listing" && body.resource !== "order" && body.resource !== "report" && body.resource !== "tip") await ref.set(changes,{merge:true});
     await db.collection("auditLogs").add({adminUid:actingAdmin.uid,adminEmail:actingAdmin.email,resource:body.resource,resourceId:body.id,action:body.action,note:body.note||"",createdAt:FieldValue.serverTimestamp()});
     return NextResponse.json({ok:true});
   } catch (error) {
