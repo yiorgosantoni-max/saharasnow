@@ -1,45 +1,14 @@
-import { NextRequest, NextResponse } from "next/server";
-import { z } from "zod";
-import { adminAuth, db } from "@/lib/firebase-admin";
-import { otpHash, safeEqual } from "@/lib/server";
-import { notifyAdmin } from "@/lib/admin-notifications";
-
-const schema = z.object({email: z.string().email(), code: z.string().regex(/^\d{6}$/), purpose: z.enum(["login", "register"]).default("login")});
-
-export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
-
-export async function POST(req: NextRequest) {
-  try {
-    const body = schema.parse(await req.json()); const email = body.email.toLowerCase().trim();
-    const ref = db.collection("loginCodes").doc(email); const snap = await ref.get(); const data = snap.data();
-    if (!data || data.purpose !== body.purpose || data.attempts >= 5 || data.expiresAt.toMillis() < Date.now() || !safeEqual(data.hash, otpHash(email, body.code))) {
-      await ref.set({attempts: (data?.attempts ?? 0)+1}, {merge:true});
-      return NextResponse.json({error:"Invalid or expired code"},{status:401});
-    }
-    let user; let created = false;
-    try { user = await adminAuth.getUserByEmail(email); }
-    catch (error: unknown) {
-      if (body.purpose !== "register" || (error as {code?: string})?.code !== "auth/user-not-found") throw error;
-      user = await adminAuth.createUser({email,emailVerified:true}); created = true;
-    }
-    if (!created) {
-      const profile = (await db.collection("users").doc(user.uid).get()).data() || {};
-      if (user.disabled || profile.accountStatus === "suspended") {
-        await ref.delete();
-        return NextResponse.json({error: "This account is suspended. Login is currently disabled."}, {status: 403});
-      }
-    }
-    const profileUpdate:Record<string,unknown>={email,updatedAt:new Date()};
-    if(created){profileUpdate.joinedAt=new Date();profileUpdate.mode="BUYING";profileUpdate.kycStatus="not-started";}
-    await db.collection("users").doc(user.uid).set(profileUpdate,{merge:true});
-    if(created)await notifyAdmin({subject:`New SaharaSnow user: ${email}`,heading:"A new user registered",message:"A new account has been created on the marketplace.",details:{Email:email,"User ID":user.uid,"Registered at":new Date().toLocaleString("en-GB",{timeZone:"Europe/Nicosia"})},actionLabel:"View users in admin",actionPath:"/admin"});
-    const customToken = await adminAuth.createCustomToken(user.uid);
-    await ref.delete();
-    return NextResponse.json({customToken});
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unable to verify security code";
-    console.error("Login-code verification failed", {message});
-    return NextResponse.json({error: message}, {status: 500});
-  }
-}
+import {FieldValue}from"firebase-admin/firestore";
+import {NextRequest,NextResponse}from"next/server";
+import {Resend}from"resend";
+import {z}from"zod";
+import {db}from"@/lib/firebase-admin";
+import {notifyAdminInApp,notifyUser}from"@/lib/notifications";
+import {postSystemMessage}from"@/lib/messaging";
+import {publicError,required,userFromRequest}from"@/lib/server";
+const escapeHtml=(value:string)=>value.replace(/[&<>"']/g,character=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[character]||character));
+export const runtime="nodejs";
+const DISPUTE_WINDOW_DAYS=3;
+const file=z.object({name:z.string().min(1).max(255),url:z.string().url().max(2000),size:z.number().int().positive().max(100*1024*1024),type:z.string().max(255).optional()});
+const schema=z.object({orderId:z.string().min(1),message:z.string().trim().max(3000).default(""),attachments:z.array(file).max(10).default([])}).refine(v=>v.message.length>0||v.attachments.length>0,{message:"Add a delivery message or attach at least one file."});
+export async function POST(req:NextRequest){try{const user=await userFromRequest(req),body=schema.parse(await req.json());const ref=db.collection("orders").doc(body.orderId);let order:any,reviewEnds:Date;await db.runTransaction(async tx=>{const snap=await tx.get(ref);if(!snap.exists)throw Error("Order not found.");order=snap.data()||{};if(String(order.sellerId)!==user.uid)throw Error("Only the seller can deliver this order.");if(!["paid","in-progress","crypto-received"].includes(String(order.status)))throw Error("This order is not ready for delivery.");const now=new Date();reviewEnds=new Date(now.getTime()+DISPUTE_WINDOW_DAYS*24*60*60*1000);tx.set(ref,{status:"delivered",deliveryStatus:"delivered",delivery:{message:body.message,attachments:body.attachments,deliveredAt:FieldValue.serverTimestamp()},deliveredAt:FieldValue.serverTimestamp(),disputeWindowEndsAt:reviewEnds,disputeDeadline:reviewEnds,clearanceStartsAt:FieldValue.delete(),clearanceEndsAt:FieldValue.delete(),updatedAt:FieldValue.serverTimestamp()},{merge:true});});await ref.collection("events").add({type:"delivery_submitted",message:body.message||`${body.attachments.length} delivery file(s) uploaded.`,attachments:body.attachments,actorId:user.uid,createdAt:FieldValue.serverTimestamp()});const number=String(order.orderNumber||body.orderId);const deliverySummary=body.attachments.length?`Your seller delivered ${body.attachments.length} file(s).`:"Your seller marked this order as delivered.";const buyerId=String(order.buyerId||"");await notifyUser({userId:buyerId,type:"order_delivered",eventId:`${body.orderId}_delivered`,title:`Order #${number} delivered`,message:`${deliverySummary} You have 3 days to review and dispute before the order enters a 1-day clearance period.`,link:`/?order=${body.orderId}`,email:false});if(buyerId){const buyerProfile=(await db.collection("users").doc(buyerId).get()).data()||{};if(buyerProfile.email){try{const appUrl=required("APP_URL");const messageHtml=body.message?`<div style="background:#f5f3f8;border-left:4px solid #ff6f61;border-radius:8px;padding:16px;white-space:pre-wrap;margin-top:14px">${escapeHtml(body.message)}</div>`:"";const attachmentsHtml=body.attachments.length?`<div style="margin-top:14px"><b>Attachments (${body.attachments.length}):</b><ul style="padding-left:18px">${body.attachments.map(a=>`<li><a href="${a.url}">${escapeHtml(a.name)}</a> (${(a.size/1048576).toFixed(2)} MB)</li>`).join("")}</ul></div>`:"";const result=await new Resend(required("RESEND_API_KEY")).emails.send({from:required("EMAIL_FROM"),to:String(buyerProfile.email),subject:`Order #${number} delivered — review and respond`,html:`<div style="font-family:Arial,sans-serif;color:#17154a;max-width:650px;margin:auto;padding:24px"><img src="${appUrl}/logo.png" width="70" height="70" alt="SaharaSnow" style="object-fit:contain"><h1>Order #${number} delivered</h1><p>Your seller marked this order as delivered.${body.message?" Here is their message:":""}</p>${messageHtml}${attachmentsHtml}<p style="margin-top:16px">You have 3 days to review, then accept, request a revision, or open a dispute before the order enters a 1-day clearance period.</p><p><a href="${appUrl}/?order=${body.orderId}" style="display:inline-block;background:#ff6f61;color:#fff;text-decoration:none;padding:12px 17px;border-radius:8px;font-weight:bold">Review the delivery</a></p></div>`});if(result.error)console.error("Delivery email failed",result.error.message);}catch(error){console.error("Delivery email failed",error instanceof Error?error.message:error);}}}await notifyAdminInApp({type:"order_delivery",eventId:body.orderId,title:`Order #${number} delivered`,message:"The 3-day buyer review window has started, followed by a 1-day clearance period.",link:"/admin"});if(buyerId)await postSystemMessage({buyerId,sellerId:user.uid,orderId:body.orderId,text:body.message?`📦 Order #${number} delivered: ${body.message}`:`📦 Order #${number} delivered. You have 3 days to review and dispute before the 1-day clearance period begins.`,attachments:body.attachments});return NextResponse.json({ok:true,orderId:body.orderId,orderNumber:number,status:"delivered",disputeWindowEndsAt:reviewEnds!.toISOString()});}catch(e){const x=e instanceof z.ZodError?{message:"Invalid delivery request.",status:400}:publicError(e);return NextResponse.json({error:x.message},{status:x.status});}}
