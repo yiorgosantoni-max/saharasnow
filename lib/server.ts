@@ -37,30 +37,6 @@ export function publicError(error: unknown) {
   return message === "UNAUTHENTICATED" ? {message, status: 401} : {message, status: 400};
 }
 
-export const REGISTRATION_MONTHLY_LIMIT = 300;
-export const REGISTRATION_LIMIT_MESSAGE = "SaharaSnow has reached this month's limit of 300 new signups. New registration slots will be available in 30 days — please check back then.";
-
-function registrationMonthKey(date = new Date()) {
-  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
-}
-
-export async function registrationSlotsAvailable() {
-  const { db } = await import("./firebase-admin");
-  const snap = await db.collection("registrationCounters").doc(registrationMonthKey()).get();
-  return Number(snap.data()?.count || 0) < REGISTRATION_MONTHLY_LIMIT;
-}
-
-export async function reserveRegistrationSlot() {
-  const { db } = await import("./firebase-admin");
-  const ref = db.collection("registrationCounters").doc(registrationMonthKey());
-  await db.runTransaction(async tx => {
-    const snap = await tx.get(ref);
-    const count = Number(snap.data()?.count || 0);
-    if (count >= REGISTRATION_MONTHLY_LIMIT) throw new Error("REGISTRATION_LIMIT_REACHED");
-    tx.set(ref, { count: FieldValue.increment(1) }, { merge: true });
-  });
-}
-
 export async function releaseEligibleSellerOrders(userId: string) {
   const snap = await (await import("./firebase-admin")).db.collection("orders").where("sellerId", "==", userId).where("status", "==", "paid").limit(200).get();
   const now = Date.now();
