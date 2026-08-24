@@ -67,7 +67,7 @@ export async function releaseEligibleSellerOrders(userId: string) {
     const data = doc.data();
     // Crypto orders must be released explicitly by an administrator. They are
     // intentionally excluded from the automatic dispute-window release path.
-    if (["usdt-trc20","usdc-bep20","crypto-usdt-trc20"].includes(String(data.paymentMethod||""))) continue;
+    if (["usdt-trc20","usdc-bep20","usdc-solana","crypto-usdt-trc20"].includes(String(data.paymentMethod||""))) continue;
     const deadline = data.disputeDeadline && typeof data.disputeDeadline.toDate === "function" ? data.disputeDeadline.toDate() : data.disputeDeadline instanceof Date ? data.disputeDeadline : null;
     if (!deadline || deadline.getTime() > now) continue;
     const net = Number(data.sellerNetCents ?? data.serviceCents ?? 0);
