@@ -101,7 +101,10 @@ export async function GET(req: NextRequest) {
     await admin(req);
     const [kyc, listings, rawWithdrawals, rawOrders, tickets, users, auditLogs, reports] = await Promise.all([
       recent("kyc"), recent("listings"), recent("withdrawals"),
-      recent("orders", 300).then((items: RecentItem[]) => items.filter((item: RecentItem) => ["paid","in-progress","delivered","disputed","completed-released","refunded","awaiting-crypto-payment","payment-submitted","payment-rejected","crypto-received","pending-admin-release","released"].includes(String(item.status)))),
+      // No status allow-list: an allow-list silently hides any order whose status
+      // isn't on it (which is how crypto orders and disputes went missing), and
+      // the administrator should be able to see every order regardless.
+      recent("orders", 300),
       recent("supportTickets"), recent("users", 100), recent("auditLogs", 200), recent("contentReports", 200)
     ]);
     const tips = await withOrderProfiles(await recent("tips", 200));
